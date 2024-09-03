@@ -1,0 +1,17 @@
+.vscode
+.venv
+
+__pycache__
+
+log/
+debug/
+data/
+docs/
+img_lesions/
+img_whole_union/
+img_lesions_statistics/
+lesions_cropped/
+plots/
+
+
+*debug.yaml

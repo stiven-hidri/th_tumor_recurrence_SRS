@@ -1,0 +1,18 @@
+dataset:
+  source: ./../../data/processed/
+model:
+  name: base_model
+  epochs: 20
+  batch_size: 32
+  learning_rate: 1e-3
+  optimizer: adam
+  scheduler: plateau
+  only_test: False
+logger:
+  log_dir: ./log
+  experiment_name: train_base_model
+  version: 1
+checkpoint:
+  monitor: val_loss
+  save_top_k: 3
+  mode: min
