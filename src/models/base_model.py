@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.nn.init as init
 
 class BaseModel(nn.Module):
     def __init__(self):
@@ -49,7 +50,19 @@ class BaseModel(nn.Module):
         # Final output layer
         self.final_fc = nn.Linear(128 * 3, 1)
         
+        # Xavier initialization
+        for module in self.modules():
+            if isinstance(module, nn.Conv3d) or isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    module.bias.data.zero_()
+        
     def forward(self, les_input, dose_input, clinical_input):
+        
+        les_input = les_input.unsqueeze(1)
+        dose_input = dose_input.unsqueeze(1)
+        clinical_input = clinical_input.squeeze()
+        
         # Lesion branch
         x = F.relu(self.les_conv1(les_input))
         x = self.les_pool1(x)
@@ -95,7 +108,6 @@ class BaseModel(nn.Module):
         # Concatenate outputs
         combined = torch.cat((les_output, dose_output, clinical_output), dim=1)
         
-        # Final output
         output = torch.sigmoid(self.final_fc(combined))
         
         return output

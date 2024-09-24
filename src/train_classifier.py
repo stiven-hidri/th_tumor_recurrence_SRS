@@ -15,13 +15,10 @@ if __name__ == '__main__':
     config, device = parser.parse_args()
 
     # Load sources
-    classifier_dataset = ClassifierDataset(
-        source=config.dataset.source
-    )
+    classifier_dataset = ClassifierDataset()
 
     # Create train-val-test splits
-    splits = classifier_dataset.create_splits(config.dataset.splits)
-    train_split, val_split, test_split = splits
+    train_split, val_split, test_split = classifier_dataset.create_splits()
 
     # Instantiate Dataloaders for each split
     train_dataloader = DataLoader(train_split, batch_size=config.model.batch_size, shuffle=True, num_workers=4, persistent_workers=True)

@@ -4,12 +4,7 @@ from typing import List, Optional, Union
 
     
 class DatasetConfig(BaseModel):
-    #TODO: check here
-    # defects_folder: Optional[Path] = None
-    # defects_masks_folder: Optional[Path] = None
-    # synthetized_defects_folder: Optional[Path] = None
-    # synthetized_no_defects_folder: Optional[Path] = None
-    splits: List[float]
+    name: Optional[str]
 
 class ModelConfig(BaseModel):
     name: str

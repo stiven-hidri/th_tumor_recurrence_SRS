@@ -1,7 +1,10 @@
+import pickle
 from fuzzywuzzy import fuzz, process
 import os
 import shutil
 import re
+
+import numpy as np
 def couple_roi_names(clinical_names, target):
     matches = {}
     if len(clinical_names) == 1 and len(clinical_names) == 1:
@@ -101,3 +104,11 @@ def process_roi(text):
     result = ' '.join(parts)
     
     return result
+
+def print_statistics():
+    PATH = os.path.join(os.path.dirname(__file__), '..','..', 'data', 'processed')
+    for split in ['train', 'test', 'val']:
+        with open(os.path.join(PATH, f'{split}_set.pkl'), 'rb') as f:
+            data = pickle.load(f)
+            labels, counts = np.unique([x for x in data['label']], return_counts=True)
+            print(f'{split}: {dict(zip(labels, counts))}')
