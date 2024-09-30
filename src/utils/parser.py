@@ -16,6 +16,13 @@ class Parser:
 
         # General data args
         self.parser.add_argument('--lr', type=float, help='Learning rate', dest='LR')
+        self.parser.add_argument('--weight_decay', type=float, help='Weight decay', dest='WEIGHT_DECAY')
+        self.parser.add_argument('--rnn_type', type=float, help='Weight decay', dest='RNN_TYPE')
+        self.parser.add_argument('--alpha_fl', type=float, help='Alpha focal loss', dest='ALPHA_FL')
+        self.parser.add_argument('--gamma_fl', type=float, help='Gamma focal loss', dest='GAMMA_FL')
+        self.parser.add_argument('--lf', type=float, help='Loss function acronym', dest='LF')
+        self.parser.add_argument('--dropout', type=float, help='Dropout', dest='DROPOUT')
+        self.parser.add_argument('--pos_weight', type=float, help='Positive weight WBCE', dest='POS_WEIGHT')
         self.parser.add_argument('--epochs', type=int, help='Number of epochs', dest='EPOCHS')
         self.parser.add_argument('--pretrained', type=str, help='Path to pretrained model checkpoint', dest='PRETRAINED')
         self.parser.add_argument('--only_test', help='Set True to skip training', action='store_true', dest='ONLY_TEST')
@@ -50,6 +57,27 @@ class Parser:
 
         if self.args.LR is not None:
             config.model.learning_rate = self.args.LR
+
+        if self.args.WEIGHT_DECAY is not None:
+            config.model.weight_decay = self.args.WEIGHT_DECAY
+            
+        if self.args.RNN_TYPE is not None:
+            config.model.rnn_type = self.args.RNN_TYPE
+            
+        if self.args.ALPHA_FL is not None:
+            config.model.alpha_fl= self.args.ALPHA_FL
+            
+        if self.args.GAMMA_FL is not None:
+            config.model.gamma_fl = self.args.GAMMA_FL
+            
+        if self.args.LF is not None:
+            config.model.lf = self.args.LF
+            
+        if self.args.DROPOUT is not None:
+            config.model.dropout = self.args.DROPOUT
+            
+        if self.args.POS_WEIGHT is not None:
+            config.model.pos_weight = self.args.POS_WEIGHT
 
         if self.args.EPOCHS is not None:
             config.model.epochs = self.args.EPOCHS

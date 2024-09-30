@@ -4,7 +4,7 @@ import pandas as pd
 from pprint import pprint
 from utils import process_roi, process_mets, process_prim
 
-CLINIC_DATA_FILE_PATH = os.path.join('..', 'Brain-TR-GammaKnife-Clinical-Information.xlsx')
+CLINIC_DATA_FILE_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'origin', 'Brain_TR_GammaKnife_Clinical_Information.xlsx')
 clinic_data_ll = pd.read_excel(CLINIC_DATA_FILE_PATH, sheet_name='lesion_level')
 clinic_data_cl = pd.read_excel(CLINIC_DATA_FILE_PATH, sheet_name='course_level')
 clinic_data_ll_renaming = {'unique_pt_id': 'subject_id', 'Treatment Course':'course', 'Lesion Location':'roi', 'mri_type':'label', 'duration_tx_to_imag (months)': 'duration_tx_to_imag', 'Fractions':'fractions'}
@@ -23,8 +23,8 @@ set_prim = set()
 
 for i, row in clinic_data.iterrows():
     set_roi.add(process_roi(row['roi']))
-    set_mets.add(process_mets(row['mets_diagnosis']).lower())
-    set_prim.add(process_prim(row['primary_diagnosis']).lower())
+    set_mets.add(process_mets(row['mets_diagnosis']))
+    set_prim.add(process_prim(row['primary_diagnosis']))
 
 print("ROIs")
 pprint(set_roi)
@@ -32,3 +32,5 @@ print("METSs")
 pprint(set_mets)
 print('PRIMs')
 pprint(set_prim)
+
+print(f'ROIS: {len(set_roi)}\tMETS: {len(set_mets)}\tPRIM: {len(set_prim)}')

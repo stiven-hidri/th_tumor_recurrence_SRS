@@ -11,6 +11,13 @@ class ModelConfig(BaseModel):
     epochs: int
     batch_size: int
     learning_rate: float
+    weight_decay: float
+    rnn_type: str
+    alpha_fl:float
+    gamma_fl: float
+    lf:str
+    pos_weight:float
+    dropout: float
     optimizer: str
     scheduler: str
     only_test: bool

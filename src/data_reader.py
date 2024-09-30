@@ -9,15 +9,13 @@ from rt_utils import RTStructBuilder
 import shutil
 from scipy.ndimage import zoom
 from sklearn import preprocessing
-from sklearn.preprocessing import RobustScaler
 import torch
-from utils.utils import couple_roi_names
+from utils.utils import couple_roi_names, process_mets, process_prim, process_roi
 import SimpleITK as sitk
-
 import numpy as np
-from scipy.ndimage.interpolation import affine_transform
-import elasticdeform
-import multiprocessing as mp
+import torch.nn.functional as F
+
+
 
 class RawData_Reader():
     def __init__(self) -> None:
@@ -34,8 +32,9 @@ class RawData_Reader():
         self.clinic_data_ll = pd.read_excel(self.CLINIC_DATA_FILE_PATH, sheet_name='lesion_level')
         self.clinic_data_cl = pd.read_excel(self.CLINIC_DATA_FILE_PATH, sheet_name='course_level')
         
-        self.clinic_data = None
-
+        self.CLINIC_FEATURES_TO_DISCRETIZE = [0, 1, 3, 4]
+        self.CLINIC_FEATURES_TO_NORMALIZE = [2, 5]
+        
         self.split_info = None
         
         self.global_data = {'mr': [], 'rtd': [], 'clinic_data': [], 'label': [], 'subject_id': []}
@@ -44,12 +43,16 @@ class RawData_Reader():
         self.val_set = {'mr': [], 'rtd': [], 'clinic_data': [], 'label': []}
         self.test_set = {'mr': [], 'rtd': [], 'clinic_data': [], 'label': []}
         
+        self.ALL_SPLITS = None
+        
     def only_process(self):
         self.__clean_output_directory__(dr.OUTPUT_PROCESSED_DATA_FOLDER_PATH)
         self.__load__()
-        self.__normalize_train_set__()
+        self.__normalize_splits__()
+        self.__one_hot__()
         self.__augment_train_set__()
         self.__save__(raw=False)
+        print('Done!', end='\r')
         
     def full_run(self, cleanOutDir = True):
         self.__adjust_dataframes__()
@@ -90,12 +93,13 @@ class RawData_Reader():
                     
             print(f'\rStep: {cnt+1}/{total_subjects}', end='')
         
-        self.__encode_discrete__()
         self.__generate_split__()
+        self.__discretize_categorical_features__()
         
         self.__save__(raw=True)
         
-        self.__normalize_train_set__()
+        self.__encode_discrete__()
+        self.__normalize_splits__()
         self.__augment_train_set__()
         
         self.__save__(raw=False)
@@ -103,12 +107,15 @@ class RawData_Reader():
         print('\nData has been read successfully!\n')
         
     def __load__(self):
+        print('Loading data...', end='\r')
         with open(os.path.join(self.OUTPUT_RAW_DATA_FOLDER_PATH, 'train_set.pkl'), 'rb') as f:
             self.train_set = pickle.load(f)
         with open(os.path.join(self.OUTPUT_RAW_DATA_FOLDER_PATH, 'val_set.pkl'), 'rb') as f:
             self.val_set = pickle.load(f)
         with open(os.path.join(self.OUTPUT_RAW_DATA_FOLDER_PATH, 'test_set.pkl'), 'rb') as f:
             self.test_set = pickle.load(f)
+            
+        self.ALL_SPLITS = [self.train_set, self.val_set, self.test_set]
         
     def __adjust_dataframes__(self):
         rawdata_meta_renaming = {'Study Date':'study_date','Study UID':'study_uid','Subject ID':'subject_id', 'Modality':'modality', 'File Location':'file_path'}
@@ -215,9 +222,10 @@ class RawData_Reader():
         
         for roi in rois:
             clinic_data_row = self.clinic_data.loc[(self.clinic_data['subject_id']==subject_id)&(self.clinic_data['course']==course)&(self.clinic_data['roi']==roi), ['mets_diagnosis', 'primary_diagnosis', 'age', 'gender', 'roi', 'fractions']].values[0]
-            clinic_data_row[0] = re.sub('[^0-9a-zA-Z]+', '_', clinic_data_row[0]).lower()
-            clinic_data_row[1] = re.sub('[^0-9a-zA-Z]+', '_', clinic_data_row[1]).lower()
-            clinic_data_row[4] = re.sub('[^0-9a-zA-Z]+', '_', clinic_data_row[4]).lower()
+            clinic_data_row[0] = process_mets(clinic_data_row[0])
+            clinic_data_row[1] = process_prim(clinic_data_row[1])
+            clinic_data_row[3] = clinic_data_row[3].strip().lower()
+            clinic_data_row[4] = process_roi(clinic_data_row[4])
             to_return.append(clinic_data_row)
             
         return to_return
@@ -262,25 +270,6 @@ class RawData_Reader():
         ), mode='constant', constant_values=0)
         
         return padded_arr
-    
-    def __normalize_whole__(self, mr, rtd):
-                
-        mr = ( mr - mr.min() ) / (mr.max() - mr.min())
-        rtd = ( rtd - rtd.min() ) / (rtd.max() - rtd.min())
-        
-        return mr, rtd
-    
-    def __normalize_train_set__(self):
-        i = 0
-        total_len = len(self.train_set['mr'])
-        while i < total_len:
-            mr, rtd = self.train_set['mr'][i], self.train_set['rtd'][i]
-            mr, rtd = self.__normalize_whole__(mr, rtd)
-            
-            self.train_set['mr'][i] = mr
-            self.train_set['rtd'][i] = rtd
-                
-            i+=1
 
     def __append_data__(self, subject_id, mrs, rtds, clinic_data, labels):
         for i in range(len(labels)):
@@ -291,6 +280,7 @@ class RawData_Reader():
             self.global_data['label'].append(labels[i])
 
     def __augment_train_set__(self):
+        print('Augmenting data...', end='\r')
         i = 0
         total_len = len(self.train_set['mr'])
         while i < total_len:
@@ -308,116 +298,6 @@ class RawData_Reader():
                 self.train_set['label'] = torch.cat((self.train_set['label'], torch.tensor(augmented_label).to(torch.float32).view(-1, 1)), dim=0)
                 
             i+=1
-        
-        i = 0
-        total_len = len(self.train_set['mr'])
-        while i < total_len:
-            mr, rtd = self.train_set['mr'][i], self.train_set['rtd'][i]
-            mr, rtd = self.__combine_aug__(mr, rtd)
-
-            if mr is not None and rtd is not None:
-                label = self.train_set['label'][i]
-                clinic_data = self.train_set['clinic_data'][i]
-                
-                self.train_set['mr'].append(mr)
-                self.train_set['rtd'].append(rtd)
-                self.train_set['clinic_data'].append(clinic_data)
-                self.train_set['label'] = torch.cat((self.train_set['label'], torch.tensor(label).to(torch.float32).view(-1, 1)), dim=0)
-                
-            i+=1
-
-    def __brightness__(self, mr, rtd):
-        """
-        Changing the brighness of a image using power-law gamma transformation.
-        Gain and gamma are chosen randomly for each image channel.
-        
-        Gain chosen between [0.8 - 1.2]
-        Gamma chosen between [0.8 - 1.2]
-        
-        new_im = gain * im^gamma
-        """
-        
-        mr, rtd = mr.numpy(), rtd.numpy()
-        
-        mr_new, rtd_new = np.zeros(mr.shape), np.zeros(rtd.shape)
-        
-        gain, gamma = (1.2 - 0.8) * np.random.random_sample(2,) + 0.8
-        
-        mr_new = np.sign(mr) * gain * (np.abs(mr)**gamma)
-        rtd_new = np.sign(rtd) * gain * (np.abs(rtd)**gamma)
-        
-        mr_new = torch.Tensor(mr_new).to(torch.float32)
-        rtd_new = torch.Tensor(rtd_new).to(torch.float32)
-
-        return mr_new, rtd_new
-
-    def __elastic__(self, mr, rtd):
-        """
-        Elastic deformation on a image and its target
-        """
-        
-        mr, rtd = mr.numpy(), rtd.numpy()
-        
-        [mr, rtd] = elasticdeform.deform_random_grid([mr, rtd], sigma=2, axis=[(0, 1, 2), (0, 1, 2)], order=[1, 0], mode='constant')
-        
-        mr = torch.Tensor(mr).to(torch.float32)
-        rtd = torch.Tensor(rtd).to(torch.float32)
-        
-        return mr, rtd 
-
-    def __affine_shear__(self, mr, rtd):
-        # Step 1: Convert tensor to SimpleITK Image
-        mr, rtd = sitk.GetImageFromArray(mr), sitk.GetImageFromArray(rtd)
-
-        # Step 2: Generate random shearing factors for a random axis
-        shear_factors = [random.uniform(-0.2, 0.2) for _ in range(2)]  # Random shear values
-        axis = random.choice(['xy', 'xz', 'yz'])
-
-        # Step 3: Create the shear transform
-        shear_transform = sitk.AffineTransform(3)  # 3D affine transform
-
-        if axis == 'xy':
-            shear_transform.SetMatrix([1, shear_factors[0], 0, shear_factors[1], 1, 0, 0, 0, 1])
-        elif axis == 'xz':
-            shear_transform.SetMatrix([1, 0, shear_factors[0], 0, 1, 0, shear_factors[1], 0, 1])
-        elif axis == 'yz':
-            shear_transform.SetMatrix([1, 0, 0, 0, 1, shear_factors[0], 0, shear_factors[1], 1])
-
-        # Step 4: Apply the shear transformation
-        center = mr.TransformContinuousIndexToPhysicalPoint([(size-1)/2.0 for size in mr.GetSize()])
-        shear_transform.SetCenter(center)
-        mr, rtd = sitk.Resample(mr, shear_transform), sitk.Resample(rtd, shear_transform)
-
-        # Step 5: Convert back to tensor (numpy array)
-        mr = sitk.GetArrayFromImage(mr)
-        rtd = sitk.GetArrayFromImage(rtd)
-        
-        return mr, rtd
-
-    def __random_flip__(self, mr, rtd):
-        if np.random.random_sample() > .5:
-            mr, rtd = mr.fliplr(), rtd.fliplr()
-            
-        if np.random.random_sample() > .5:
-            mr, rtd = mr.flipud(), rtd.flipud()
-            
-        return mr, rtd
-
-    def __combine_aug__(self, mr, rtd):
-        
-        augmentations = [self.__affine_shear__, self.__brightness__, self.__random_flip__]
-        probabilities = [.3, .3, .3]
-        augmented = False
-        
-        for aug, prob in zip(augmentations, probabilities):
-            if random.random() < prob:
-                augmented = True
-                mr, rtd = aug(mr, rtd)
-
-        if not augmented:
-            return None, None
-        else:
-            return mr, rtd
 
     def __rotate_image__(self, image) -> dict:
         rotated_images = []
@@ -431,17 +311,90 @@ class RawData_Reader():
         
         return rotated_images
     
-    def __encode_discrete__(self):
-        self.global_data['label'] = [1 if label == 'recurrence' else 0 for label in self.global_data['label']]
+    def __discretize_categorical_features__(self):
+        self.global_data['label'] = np.array([1 if label == 'recurrence' else 0 for label in self.global_data['label']])
         
-        tmp = np.array([sl for sl in self.global_data['clinic_data']])        
-        tmp_enc = [preprocessing.LabelEncoder().fit(tmp[:,j]) for j in[0,1,3, 4] ]
+        tmp = np.array(self.global_data['clinic_data'])
         
-        for n, j in enumerate([0, 1, 3, 4]):
-            tmp[:,j] = tmp_enc[n].transform(tmp[:,j])
-                                
-        for i, sl in enumerate(tmp):
-            self.global_data['clinic_data'][i] = np.int64(sl)
+        for j in self.CLINIC_FEATURES_TO_DISCRETIZE:
+            tmp[:,j] = preprocessing.LabelEncoder().fit_transform(tmp[:,j])
+        
+        self.global_data['clinic_data'] = tmp.astype(np.int64)
+    
+    def __one_hot__(self):        
+        max_values = {}
+        for split in self.ALL_SPLITS:
+            for tensor in split['clinic_data']:
+                for j, feature in enumerate(tensor):
+                    if j in self.CLINIC_FEATURES_TO_DISCRETIZE:
+                        if j not in max_values:
+                            max_values[j] = int(feature)
+                        else:
+                            max_values[j] = max(max_values[j], int(feature))
+        
+        for split in self.ALL_SPLITS:
+            for i_tensor in range(len(split['clinic_data'])):
+                new_tensor = [split['clinic_data'][i_tensor][j] for j in self.CLINIC_FEATURES_TO_NORMALIZE]                
+                for j in self.CLINIC_FEATURES_TO_DISCRETIZE:
+                    new_tensor.append(F.one_hot(split['clinic_data'][i_tensor][j].long(), num_classes=max_values[j]+1).float()[0])
+                split['clinic_data'][i_tensor] = torch.cat(new_tensor)
+                
+    
+    def __compute_statistics__(self, data):
+        statistics = {}
+                
+        for key in data.keys():
+            current_data = torch.cat([tensor.view(-1) for tensor in data[key]])
+            if key == 'clinic_data':
+                statistics[key] = {}
+                for j in self.CLINIC_FEATURES_TO_NORMALIZE:
+                    selected_data = []
+                    
+                    for tensor in data[key]:
+                        selected_data.extend(tensor[self.CLINIC_FEATURES_TO_NORMALIZE].view(-1).tolist())  # Flatten and add to the list
+
+                    all_data = torch.tensor(selected_data)
+
+                    # Compute statistics
+                    statistics[key][j] = {
+                        'min': all_data.min().item(),
+                        'max': all_data.max().item(),
+                        'mean': all_data.mean().item(),
+                        'std': all_data.std().item()
+                    }
+            else:
+                statistics[key] = {
+                    'min': current_data.min().item(),
+                    'max': current_data.max().item(),
+                    'mean': current_data.mean().item(),
+                    'std': current_data.std().item()
+                }
+        
+        return statistics        
+    
+    def __minmax_scaling__(sample, statistics):
+        sample = (sample - statistics['min']) / (statistics['max'] - statistics['min'])
+        return sample
+        
+    def __z_norm__(sample, statistics):
+        sample = (sample - statistics['mean']) / statistics['std']
+        return sample
+    
+    def __normalize__(self, split, statistics, f):
+        for key in split.keys():
+            if key == 'clinic_data':
+                for j in statistics[key].keys():
+                    for i_tensor in range(len(split[key])):
+                        split[key][i_tensor][j] = f(split[key][i_tensor][j], statistics[key][j])
+            else:
+                for i_tensor in range(len(split[key])):
+                    split[key][i_tensor] = f(split[key][i_tensor], statistics[key])
+    
+    def __normalize_splits__(self, f = __minmax_scaling__):
+        statistics = self.__compute_statistics__(self.train_set)
+        
+        for split in self.ALL_SPLITS:
+            self.__normalize__(split, statistics, f)
     
     def __generate_split__(self):
         for i, subject_id in enumerate(self.global_data['subject_id']):
@@ -460,6 +413,7 @@ class RawData_Reader():
             target['rtd'].append(torch.Tensor(self.global_data['rtd'][i]).to(torch.float32))
     
     def __save__(self, raw = True):
+        print('Saving data...', end='\r')
         
         if raw:
             self.train_set['label'] = torch.Tensor(self.train_set['label']).to(torch.float32).view(-1, 1)
@@ -493,12 +447,12 @@ class RawData_Reader():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--only_augment', action='store_true')
+    parser.add_argument('--only_process', action='store_true')
     args = parser.parse_args()
     
     dr = RawData_Reader()
     
-    if args.only_augment:
+    if args.only_process:
         dr.only_process()
     else:
         dr.full_run(cleanOutDir=False)

@@ -28,17 +28,33 @@ def clear_directory_content(PATH):
 def rm_pss(s, delim='_'):
     return delim.join(c for c in s if c.isalnum())
 
+parts_to_remove_prim = ['in', 'of', 'the', 'left','rt','breast', 'er', 'pr', 'her', 'invasive', 'ovarian', 'urothelial', 'lung', 'large', 'small', 'squamous']
 def process_prim(text):
     text = re.sub(r'[^a-zA-Z]+', ' ', text).lower().strip()
+    text = text.replace('adenocarcinoma of the lung squamous cell carcinoma','')
+    text = text.replace('unspecified breast cancer','')
+    text = text.replace('non small', '')
+    text = text.replace('renal cell', '')
+    text = text.replace('renal cell', '')
+    parts = [part for part in text.split(' ') if part not in parts_to_remove_prim]
+    text = ' '.join(parts)
+    text = ' '.join(text.split()).strip()
     return text
 
-mapping_mets = {
-    "brain mets": '',
-    "brain met": '',
-}
+parts_to_remove_mets = ['urothelial', 'with', 'large', 'frontal', 'met', 'ca', 'cell', 'mets']
 
 def process_mets(text):
     text = re.sub(r'[^a-zA-Z]+', ' ', text).lower().strip()
+    text = text.replace('gk brain mets lesions','')
+    text = text.replace('large cell','')
+    text = text.replace('post op cavity','')
+    text = text.replace('brain mets','')
+    text = text.replace('brain met','')
+    text = text.replace('endometrial','uterine')
+    text = text.replace('rcc','renal')
+    parts = [part for part in text.split(' ') if part not in parts_to_remove_mets]
+    text = ' '.join(parts)
+    text = ' '.join(text.split()).strip()
     return text
     
 mapping_roi = {
@@ -56,12 +72,14 @@ mapping_roi = {
     "cerebella": "cerebellar",
     "cerebellum": "cerebellar",
     "cerebellu": "cerebellar",
+    "cerebel": "cerebellar",
     "ant": "anterior",
     "frontal": "frontal",
     "front": "frontal",
     "fro": "frontal",
     "mesial":"medial",
     "lat": "lateral",
+    "late": "lateral",
     "inf": "inferior",
     "temp": "temporal",
     "tempora": "temporal",
@@ -73,6 +91,7 @@ mapping_roi = {
     "median": "medial",
     "medial": "medial",
     "occip": "occipital",
+    "occ": "occipital",
     "occi": "occipital",
     "occipit": "occipital",
     "sup": "superior",
@@ -87,7 +106,19 @@ mapping_roi = {
     "premotor": "premotor_cortex",
     "corr": "corrected",
     "post": "posterior",
-    "cav": "cavity"
+    "cav": "cavity",
+    "fla": "",
+    "ven": "ventricle",
+    "ventr": "ventricle",
+    "cortex": "",
+    "met": "",
+    "insula": "insular",
+    "su": "superior",
+    "parame": "paramedian",
+    "op": "",
+    "int": "internal",
+    "deep": "",
+    "lesion":""
 }
     
 def process_roi(text):
@@ -98,10 +129,22 @@ def process_roi(text):
     
     if text.startswith('lt') and not text.startswith('lt '):
         text = text.replace('lt', 'left ')
+        
+    if text.startswith('cavity '):
+        text = text.replace('cavity ', '')
+    
+    text = text.replace(' re tx', '')
+        
+    text = text.replace('frontal pole', 'prefrontal')
+        
+    text = text.replace('frontal pre', 'prefrontal')
+    
+    text = text.replace('para medial', 'paramedian')
     
     parts = [ part if part not in mapping_roi.keys() else mapping_roi[part] for part in text.split(' ') ]
     
-    result = ' '.join(parts)
+    result = ' '.join(parts).strip()
+    result = ' '.join(result.split()).strip()
     
     return result
 
