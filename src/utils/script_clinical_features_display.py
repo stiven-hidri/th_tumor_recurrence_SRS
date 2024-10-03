@@ -1,7 +1,7 @@
 import os
 import re
 import pandas as pd
-from pprint import pprint
+import pprint
 from utils import process_roi, process_mets, process_prim
 
 CLINIC_DATA_FILE_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'origin', 'Brain_TR_GammaKnife_Clinical_Information.xlsx')
@@ -20,17 +20,24 @@ clinic_data = pd.merge_ordered(clinic_data_ll, clinic_data_cl, on=['subject_id',
 set_roi = set()
 set_mets = set()
 set_prim = set()
+word_set = set()
 
 for i, row in clinic_data.iterrows():
     set_roi.add(process_roi(row['roi']))
     set_mets.add(process_mets(row['mets_diagnosis']))
     set_prim.add(process_prim(row['primary_diagnosis']))
 
-print("ROIs")
-pprint(set_roi)
-print("METSs")
-pprint(set_mets)
-print('PRIMs')
-pprint(set_prim)
+for roi in set_roi:
+    for word in roi.split(' '):
+        word_set.add(word)
 
-print(f'ROIS: {len(set_roi)}\tMETS: {len(set_mets)}\tPRIM: {len(set_prim)}')
+with open('clinic_data_features.txt', 'w') as f:
+    f.write("ROIs\n")
+    f.write(pprint.pformat(set_roi, indent=4))
+    f.write("\nMETSs\n")
+    f.write(pprint.pformat(set_mets, indent=4))
+    f.write("\nPRIMs\n")
+    f.write(pprint.pformat(set_prim, indent=4))
+    f.write(f'\nROIS: {len(set_roi)}\tMETS: {len(set_mets)}\tPRIM: {len(set_prim)}\n')
+    f.write(pprint.pformat(word_set, indent=4))
+    f.write(f'\nWORDS: {len(word_set)}\n')

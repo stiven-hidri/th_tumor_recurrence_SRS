@@ -2,22 +2,21 @@ dataset:
   name: name
 model:
   name: base_model
-  epochs: 30
+  epochs: 25
   batch_size: 32
   optimizer: adam
   scheduler: plateau
   rnn_type: None
   #patience: 1
   learning_rate: 5e-5
-  weight_decay: 1e-6
+  weight_decay: 1e-4
   dropout: .3
   only_test: False
 
   lf: wbce          #wbce, bce, fl
   alpha_fl: .915
   gamma_fl: 2
-  pos_weight: 3
-  dropout: .3
+  pos_weight: .92
 logger:
   log_dir: ./log
   experiment_name: train_base_model

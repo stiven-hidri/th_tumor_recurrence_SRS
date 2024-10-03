@@ -1,55 +1,56 @@
 import torch
 
 
-class FocalLoss(torch.nn.Module):
+import torch
+import torch.nn as nn
+
+class FocalLoss(nn.Module):
     def __init__(self, alpha=1, gamma=2, reduction='mean'):
         super(FocalLoss, self).__init__()
         self.alpha = alpha
         self.gamma = gamma
         self.reduction = reduction
 
-    def forward(self, inputs, targets):
-        BCE_loss = torch.nn.BCEWithLogitsLoss(reduction='none')(inputs, targets)
-        pt = torch.exp(-BCE_loss)  # Probability of the true class
-        F_loss = self.alpha * (1 - pt) ** self.gamma * BCE_loss
-
-        if self.reduction == 'mean':
-            return F_loss.mean()
-        elif self.reduction == 'sum':
-            return F_loss.sum()
-        else:
-            return F_loss
+    def forward(self, logits, targets):
+        BCE_loss = nn.functional.binary_cross_entropy_with_logits(logits, targets, reduction='none')
+        probs = torch.sigmoid(logits)
+        pt = targets * probs + (1 - targets) * (1 - probs)
+        focal_loss = self.alpha * (1 - pt) ** self.gamma * BCE_loss
         
+        if self.reduction == 'mean':
+            return focal_loss.mean()
+        elif self.reduction == 'sum':
+            return focal_loss.sum()
+        else:
+            return focal_loss
 
-class BinaryCrossEntropy(torch.nn.Module):
+
+class BCELoss(nn.Module):
     def __init__(self, reduction='mean'):
-        super(BinaryCrossEntropy, self).__init__()
+        super(BCELoss, self).__init__()
         self.reduction = reduction
 
-    def forward(self, inputs, targets):
-        BCE_loss = torch.nn.BCEWithLogitsLoss(reduction='none')(inputs, targets)
+    def forward(self, logits, targets):
+        loss = nn.functional.binary_cross_entropy_with_logits(logits, targets, reduction=self.reduction)
+        return loss
 
-        if self.reduction == 'mean':
-            return BCE_loss.mean()
-        elif self.reduction == 'sum':
-            return BCE_loss.sum()
-        else:
-            return BCE_loss
-
-
-class WeightedBinaryCrossEntropy(torch.nn.Module):
-    def __init__(self, pos_weight = torch.tensor([3.0]), reduction='mean'):
-        super(WeightedBinaryCrossEntropy, self).__init__()
+class WeightedBCELoss(nn.Module):
+    def __init__(self, pos_weight, neg_weight, reduction='mean'):
+        super(WeightedBCELoss, self).__init__()
         self.pos_weight = pos_weight
+        self.neg_weight = neg_weight
         self.reduction = reduction
 
-    def forward(self, inputs, targets):
-        BCE_loss = torch.nn.BCEWithLogitsLoss(reduction='none', pos_weight=self.pos_weight)(inputs, targets)
-
+    def forward(self, logits, targets):
+        probs = torch.sigmoid(logits)
+        loss = - (self.pos_weight * targets * torch.log(probs) +
+                  self.neg_weight * (1 - targets) * torch.log(1 - probs))
+        
         if self.reduction == 'mean':
-            return BCE_loss.mean()
+            return loss.mean()
         elif self.reduction == 'sum':
-            return BCE_loss.sum()
+            return loss.sum()
         else:
-            return BCE_loss
+            return loss
+
 

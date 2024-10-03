@@ -9,6 +9,9 @@ class ClassifierDatasetSplit(Dataset):
     def __init__(self, data: dict, split_name: str):
         self.data = data
         self.split_name = split_name
+        self.DATA_PATH = os.path.join(os.path.dirname(__file__), '..','..', 'data', 'processed')
+        with open(os.path.join(self.DATA_PATH, f'statistics.pkl'), 'rb') as f:
+            self.statistics = pickle.load(f)
 
     def __len__(self):
         return len(self.data['label'])
@@ -21,9 +24,14 @@ class ClassifierDatasetSplit(Dataset):
         
         if int(label) == 1 and self.split_name == 'train':
             mr, rtd = combine_aug(mr, rtd)
+            mr_min = mr.min()
             
-            mr = ( mr - mr.min() ) / (mr.max() - mr.min())
-            rtd = ( rtd - rtd.min() ) / (rtd.max() - rtd.min())
+            mr_max = mr.max()
+            rtd_min = rtd.min()
+            rtd_max = rtd.max()
+            
+            mr = (mr - mr_min) / (mr_max - mr_min)
+            rtd = (rtd - rtd_min) / (rtd_max - rtd_min)
         
         return mr, rtd, clinic_data, label
 

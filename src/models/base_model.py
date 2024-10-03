@@ -43,10 +43,12 @@ class BaseModel(nn.Module):
         self.dose_fc2 = nn.Linear(512, 128)
         
         # Clinical input branch
-        self.clinical_fc1 = nn.Linear(216, 128)  # Placeholder for dynamic input layer
+        # .clinical_fc1 = nn.Linear(116, 64)  # Placeholder for dynamic input layer
+        # self.clinical_fc2 = nn.Linear(64, 32)  # Placeholder for dynamic input layer
         
         # Final output layer
-        self.final_fc = nn.Linear(128 * 3, 1)
+        # self.final_fc = nn.Linear(128 * 2 + 32, 1)
+        self.final_fc = nn.Linear(128 * 2, 1)
         
         # Xavier initialization
         for module in self.modules():
@@ -55,11 +57,11 @@ class BaseModel(nn.Module):
                 if module.bias is not None:
                     module.bias.data.zero_()
         
-    def forward(self, les_input, dose_input, clinical_input):
+    def forward(self, les_input, dose_input):
         
         les_input = les_input.unsqueeze(1)
         dose_input = dose_input.unsqueeze(1)
-        clinical_input = clinical_input.squeeze()
+        # clinical_input = clinical_input.squeeze()
         
         # Lesion branch
         x = F.relu(self.les_conv1(les_input))
@@ -99,24 +101,24 @@ class BaseModel(nn.Module):
         x = self.dose_dropout(x)
         dose_output = F.relu(self.dose_fc2(x))
         
-        if self.clinical_fc1.in_features != clinical_input.size(1):
+        # if self.clinical_fc1.in_features != clinical_input.size(1):
             # Create the linear layer dynamically based on the input size
-            num_features = clinical_input.size(1)  # Get number of features dynamically
-            self.clinical_fc1 = nn.Linear(num_features, 128)  # Initialize layer with dynamic input size
+            # num_features = clinical_input.size(1)  # Get number of features dynamically
+            # self.clinical_fc1 = nn.Linear(num_features, 64)  # Initialize layer with dynamic input size
             
         
         # Clinical branch
-        clinical_output = F.relu(self.clinical_fc1(clinical_input))
+        # clinical_output = F.relu(self.clinical_fc2(self.clinical_fc1(clinical_input)))
         # clinical_output = F.relu(self.clinical_fc2(x))
         
         # If clinical_output ends up being [128] instead of [8, 128], add the batch dimension
-        if clinical_output.dim() == 1:
-            clinical_output = clinical_output.unsqueeze(0)  # Add batch dimension
+        # if clinical_output.dim() == 1:
+        #     clinical_output = clinical_output.unsqueeze(0)  # Add batch dimension
 
         # Concatenate outputs
-        # combined = torch.cat((les_output, dose_output), dim=1)
-        combined = torch.cat((les_output, dose_output, clinical_output), dim=1)
+        combined = torch.cat((les_output, dose_output), dim=1)
+        # combined = torch.cat((les_output, dose_output, clinical_output), dim=1)
         
-        output = torch.sigmoid(self.final_fc(combined))
+        output = self.final_fc(combined)
         
         return output

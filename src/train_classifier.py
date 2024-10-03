@@ -43,6 +43,8 @@ if __name__ == '__main__':
             pos_weight = config.model.pos_weight,
             optimizer=config.model.optimizer, 
             scheduler=config.model.scheduler,
+            experiment_name=config.logger.experiment_name,
+            version=config.logger.version
         )
     else:
         module = ClassificationModule.load_from_checkpoint(
@@ -60,6 +62,8 @@ if __name__ == '__main__':
             pos_weight = config.model.pos_weight,
             optimizer=config.model.optimizer,
             scheduler=config.model.scheduler,
+            experiment_name=config.logger.experiment_name,
+            version=config.logger.version
         )
 
     # Set callback function to save checkpoint of the model

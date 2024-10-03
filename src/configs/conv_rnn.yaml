@@ -13,7 +13,7 @@ model:
   dropout: .3
   only_test: False
 
-  lf: wbce          #wbce, bce, fl
+  lf: bce          #wbce, bce, fl
   alpha_fl: .915
   gamma_fl: 2
   pos_weight: 6

@@ -37,6 +37,6 @@ class ConvRNN(nn.Module):
 
         feats = torch.stack(feats, dim=1)
         
-        out = torch.sigmoid(self.rnn(feats))
+        out = self.rnn(feats)
 
         return out

@@ -1,3 +1,5 @@
+import os
+import pickle
 from matplotlib import pyplot as plt
 from sklearn.metrics import confusion_matrix, roc_curve
 import torch
@@ -5,13 +7,14 @@ import numpy as np
 from lightning.pytorch import LightningModule
 from models.base_model import BaseModel
 from models.conv_rnn import ConvRNN
-from utils.loss_functions import WeightedBinaryCrossEntropy, FocalLoss, BinaryCrossEntropy
+from utils.loss_functions import BCELoss, WeightedBCELoss, FocalLoss
 
 class ClassificationModule(LightningModule):
-    def __init__(self, name: str, epochs: int, lr: float, optimizer: str, scheduler: str, weight_decay: float, lf:str, pos_weight:float, dropout: float, alpha_fl:float, gamma_fl:float, rnn_type: str):
+    def __init__(self, name: str, epochs: int, lr: float, optimizer: str, scheduler: str, weight_decay: float, lf:str, pos_weight:float, dropout: float, alpha_fl:float, gamma_fl:float, rnn_type: str, experiment_name: str, version: int):
         super().__init__()
         self.save_hyperparameters()
         self.name = name
+        
         # Config    
         # Network
         if 'base_model' in name:
@@ -32,16 +35,23 @@ class ClassificationModule(LightningModule):
         self.gamma_fl = gamma_fl
         self.dropout = dropout
         self.pos_weight = pos_weight
+        self.experiment_name = experiment_name
+        self.version = version
         
-        self.lf = WeightedBinaryCrossEntropy(pos_weight=torch.Tensor([self.pos_weight])) if lf == "wbce" else FocalLoss(alpha=alpha_fl, gamma=gamma_fl) if lf == "fl" else BinaryCrossEntropy() 
-
-        # Test outputs
+        if lf == "bce":
+            self.lf = BCELoss()
+        elif lf == "wbce":
+            self.lf = WeightedBCELoss(self.pos_weight, 1-self.pos_weight)
+        else:
+            self.lf = FocalLoss(alpha=alpha_fl, gamma=gamma_fl)
+    
         self.test_outputs = []
-        self.val_outputs = []
+        self.validation_outputs = []
+        self.validation_losses = []
 
     def forward(self, mr, rtd, clinic_data):
         if self.name == 'base_model':
-            y = self.model(mr, rtd, clinic_data)
+            y = self.model(mr, rtd)
         else:
             y = self.model(mr, rtd)
             
@@ -52,6 +62,7 @@ class ClassificationModule(LightningModule):
 
     def training_step(self, batch):
         mr, rd, clinic_data, label = batch
+        
         prediction = self(mr, rd, clinic_data)
         loss = self.loss_function(prediction, label)
         self.log('train_loss', loss.item(), logger=True, prog_bar=True, on_step=False, on_epoch=True)
@@ -60,7 +71,22 @@ class ClassificationModule(LightningModule):
     def on_train_epoch_end(self):
         optimizer = self.optimizers()
         lr = optimizer.param_groups[0]['lr']
-        self.log('lr', lr, prog_bar=True, on_epoch=True)
+        self.log('lr', lr, prog_bar=True, on_epoch=True)   
+
+    def on_validation_epoch_end(self):
+        validation_outputs_path = os.path.join(os.path.dirname(__file__), '..', 'log', self.experiment_name, f'version_{self.version}', "validation_outputs.pkl")
+        
+        if os.path.exists(validation_outputs_path):
+            with open(validation_outputs_path, 'rb') as f:
+                previous_validation_outputs, min_loss = pickle.load(f)
+                
+        if not os.path.exists(validation_outputs_path) or np.mean(self.validation_losses) < min_loss:
+            with open(validation_outputs_path, 'wb') as f:
+                pickle.dump((self.validation_outputs, np.mean(self.validation_losses)), f)
+
+    def on_validation_epoch_start(self):
+        self.validation_outputs = []
+        self.validation_losses = []
 
     def validation_step(self, batch):
         mr, rd, clinic_data, label = batch
@@ -69,17 +95,21 @@ class ClassificationModule(LightningModule):
         self.log('val_loss', loss.item(), logger=True, prog_bar=True, on_step=False, on_epoch=True)
         
         for i in range(mr.shape[0]):
-            self.val_outputs.append((
+            self.validation_outputs.append((
                 prediction[i],
-                label[i],
-                self.loss_function(prediction[i], label[i])    
-            ))   
-        
+                label[i]
+            )
+        )
+            
+        self.validation_losses.append(loss.item())
+    
         return {"loss": loss}
     
     def test_step(self, batch):
         mr, rd, clinic_data, label = batch
-        prediction = self(mr, rd, clinic_data)
+        #prediction = self(mr, rd, clinic_data)
+
+        prediction = torch.sigmoid(self(mr, rd, clinic_data))
 
         for i in range(mr.shape[0]):
             self.test_outputs.append((
@@ -90,60 +120,46 @@ class ClassificationModule(LightningModule):
 
         return None
 
-    def on_test_epoch_end(self):
-        # for i, (data, prediction, label, loss) in enumerate(self.test_outputs):
-        #     # Determine if prediction is correct
-        #     predicted_class = torch.argmax(prediction).item()
-        #     correct_class = label.item()
-        #     correct_prediction = (predicted_class == correct_class)
-
-        #     # Display prediction and label with color based on correctness
-        #     if correct_prediction:
-        #         continue
-        #     else:
-        #         fig, ax = plt.subplots(figsize=(6, 6))
-
-        #         # Display the image
-        #         ax.imshow(image.permute(1, 2, 0).cpu().numpy(), cmap='gray')
-        #         ax.set_title('Input Image')
-        #         prediction_text_color = 'red'
-
-        #         prediction_text = Defect(predicted_class).name
-        #         label_text = Defect(correct_class).name
-
-        #         ax.text(0.5, -0.1, f'Prediction: {prediction_text}', ha='center', va='center', transform=ax.transAxes, fontsize=12, color=prediction_text_color)
-        #         ax.text(0.5, -0.2, f'Label: {label_text}', ha='center', va='center', transform=ax.transAxes, fontsize=12, color='black')
-
-        #         plt.suptitle(f'Result {i+1}')
-
-        #         fig.canvas.draw()
-
-        #         # Copy the buffer to make it writable
-        #         plot_image = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-        #         plot_image = plot_image.copy()  # Make the buffer writable
-        #         plot_image = torch.from_numpy(plot_image)
-        #         plot_image = plot_image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-
-        #         # Log the image to TensorBoard
-        #         self.logger.experiment.add_image(f'Comparison_{i+1}.png', plot_image, self.current_epoch, dataformats='HWC')
-
-        #         plt.close(fig)
-
-        # Calculate the mean test loss
+    def choose_best_threshold(self, validation_outputs):
         
-        t = .5
+        pred_probs = [vo[0] for vo in validation_outputs]
+        true_labels = [vo[1] for vo in validation_outputs]
+        
+        thresholds = np.arange(0.0, 1.0, 0.05)
+        best_threshold = 0.5
+        best_f1 = 0
+
+        for t in thresholds:
+            pred_labels = np.array([1 if p >= t else 0 for p in pred_probs])
+            C = confusion_matrix(true_labels, pred_labels)
+            TP, TN, FP, FN = C[1,1], C[0,0], C[0,1], C[1,0]
+            
+            precision = TP / (TP + FP) if (TP + FP) > 0 else 0
+            recall = TP / (TP + FN) if (TP + FN) > 0 else 0
+            f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+
+            if f1_score > best_f1:
+                best_f1 = f1_score
+                best_threshold = t
+        
+        return best_threshold
+
+    def on_test_epoch_end(self):        
+            
+        validation_outputs_path = os.path.join(os.path.dirname(__file__), '..', 'log', self.experiment_name, f'version_{self.version}', "validation_outputs.pkl")
+        
+        if os.path.exists(validation_outputs_path):
+            with open(validation_outputs_path, 'rb') as f:
+                validation_outputs, min_loss = pickle.load(f)
+        
+        t = self.choose_best_threshold(validation_outputs)
         
         pred_labels = np.array([1 if (prediction).cpu().item() >= t else 0 for prediction, _, _ in self.test_outputs])
         true_labels = np.array([int(label.cpu().item()) for _, label, _ in self.test_outputs])
         
         C = confusion_matrix(true_labels, pred_labels)
 
-        TP = C[1,1] 
-        TN = C[0,0]
-        FP = C[0,1]
-        FN = C[1,0]
-        
-        loss = torch.tensor([sample[-1] for sample in self.test_outputs]).mean()
+        TP, TN, FP, FN = C[1,1], C[0,0], C[0,1], C[1,0]
 
         accuracy = (TP + TN) / (TP + TN + FP + FN)
         sensitivity = TP / (TP + FN)
@@ -151,41 +167,36 @@ class ClassificationModule(LightningModule):
         precision = TP / (TP + FP)
         f1_score = 2 * (precision * sensitivity) / (precision + sensitivity)
         
-        self.log('test_loss', loss, logger=True, prog_bar=True, on_step=False, on_epoch=True)
         self.log('test_accuracy', accuracy, logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        
+        self.log('threshold', t, logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        
         self.log('test_precision', precision, logger=True, prog_bar=True, on_step=False, on_epoch=True)
         self.log('test_sensitivity', sensitivity, logger=True, prog_bar=True, on_step=False, on_epoch=True)
         self.log('test_specificity', specificity, logger=True, prog_bar=True, on_step=False, on_epoch=True)
         self.log('test_f1', f1_score, logger=True, prog_bar=True, on_step=False, on_epoch=True)
 
-        # Plot the ROC curve
-
         pred_probs = np.array([prediction.cpu().item() for prediction, _, _ in self.test_outputs])
         fpr, tpr, thresholds = roc_curve(true_labels, pred_probs)
-
         fig, ax = plt.subplots(figsize=(6, 6))
-
-        ax.plot(fpr, tpr)
-
-        ax.set_xlabel('False Positive Rate')
-        ax.set_ylabel('True Positive Rate')
-        ax.set_title('Receiver Operating Characteristic (ROC) Curve')
-        ax.plot([0, 1], [0, 1], 'k--')
+        
+        ax.plot(fpr, tpr, label='ROC Curve', color='blue')
+        ax.plot([0, 1], [0, 1], 'k--', label='Chance Level')
+        ax.set_xlabel('FPR')
+        ax.set_ylabel('TPR')
+        ax.set_title('ROC')
 
         for i, threshold in enumerate(thresholds):
-            ax.plot([0, fpr[i]], [tpr[i], tpr[i]], 'b-')
-            ax.plot([fpr[i], fpr[i]], [0, tpr[i]], 'b-')
-            ax.text(fpr[i], tpr[i], f'{threshold:.2f}', ha='center', va='bottom')
+            ax.annotate(f'{threshold:.2f}', (fpr[i], tpr[i]), textcoords="offset points", xytext=(0,10), ha='center')
 
+        ax.legend()
         fig.canvas.draw()
-
-        # Copy the buffer to make it writable
+        
         plot_image = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-        plot_image = plot_image.copy()  # Make the buffer writable
+        plot_image = plot_image.copy() 
         plot_image = torch.from_numpy(plot_image)
         plot_image = plot_image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
 
-        # Log the image to TensorBoard
         self.logger.experiment.add_image(f'ROC_Curve.png', plot_image, self.current_epoch, dataformats='HWC')
 
         plt.close(fig)
