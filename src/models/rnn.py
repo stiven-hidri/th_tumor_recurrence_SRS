@@ -90,7 +90,7 @@ class GRUModel(nn.Module):
 
     def forward(self, x):
         # Initializing hidden state for first input with zeros
-        h0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim).dropout.requires_grad_()
+        h0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim).requires_grad_()
 
         # Forward propagation by passing in the input and hidden state into the model
         out, _ = self.gru(x, h0.detach())
@@ -123,7 +123,7 @@ class GRUModel_atn(nn.Module):
 
     def forward(self, x):
         # Initializing hidden state for first input with zeros
-        h0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim).dropout.requires_grad_()
+        h0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim).requires_grad_()
 
         # Forward propagation by passing in the input and hidden state into the model
         out, _ = self.gru(x, h0.detach())

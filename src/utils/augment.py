@@ -93,20 +93,20 @@ def flip(mr, rtd):
         
     return mr, rtd
 
-def combine_aug(mr, rtd):
+def combine_aug(mr, rtd, p_augmentation=.3, p_augmentation_per_techinque=.5, augmentations_techinques=['shear', 'flip', 'gaussian_noise', 'brightness']):
+    augmentations = {
+        'shear': shear, 
+        'flip': flip, 
+        'gaussian_noise':gaussian_noise, 
+        'brightness':brightness
+    }
     
-    augmentations = [shear, flip, gaussian_noise]
-    probabilities = [.3] * len(augmentations)
+    augmentations = [augmentations[a] for a in augmentations_techinques if a in list(augmentations.keys())]
+    probabilities = [p_augmentation_per_techinque] * len(augmentations)
     
-    if random.random() <= .8:
+    if random.random() <= p_augmentation:
         for aug, prob in zip(augmentations, probabilities):
             if random.random() < prob:
-                if aug == gaussian_noise:
-                    if random.random() < .3:
-                        mr, rtd = gaussian_noise(mr, rtd)
-                    elif random.random() < .3:
-                        mr, rtd = brightness(mr, rtd)
-                else:
-                    mr, rtd = aug(mr, rtd)
+                mr, rtd = aug(mr, rtd)
 
     return mr, rtd

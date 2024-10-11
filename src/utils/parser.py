@@ -26,6 +26,9 @@ class Parser:
         self.parser.add_argument('--epochs', type=int, help='Number of epochs', dest='EPOCHS')
         self.parser.add_argument('--pretrained', type=str, help='Path to pretrained model checkpoint', dest='PRETRAINED')
         self.parser.add_argument('--only_test', help='Set True to skip training', action='store_true', dest='ONLY_TEST')
+        self.parser.add_argument('--augmentation_techniques', type=list, help='Augmentation techinques to apply', dest='augmentation_techniques')
+        self.parser.add_argument('--p_augmentation', type=float, help='Probability to augment', dest='P_AUGMENTATION')
+        self.parser.add_argument('--p_augmentation_per_technique', type=float, help='Probability to apply each technique', dest='P_AUGMENTATION_PER_TECHNIQUE')
 
         # Logger args
         self.parser.add_argument('--experiment_name', type=str, help='Experiment name', dest='EXPERIMENT_NAME')
@@ -93,5 +96,14 @@ class Parser:
 
         if self.args.VERSION_NUMBER is not None:
             config.logger.version = self.args.VERSION_NUMBER
+            
+        if self.args.augmentation_techniques is not None:
+            config.logger.augmentation_techniques = self.args.augmentation_techniques
+            
+        if self.args.P_AUGMENTATION is not None:
+            config.logger.p_augmentation = self.args.P_AUGMENTATION
+            
+        if self.args.P_AUGMENTATION_PER_TECHNIQUE is not None:
+            config.logger.p_augmentation_per_technique = self.args.P_AUGMENTATION_PER_TECHNIQUE
 
         return config, device

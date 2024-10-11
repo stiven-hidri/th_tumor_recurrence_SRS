@@ -7,10 +7,12 @@ import numpy as np
 from lightning.pytorch import LightningModule
 from models.base_model import BaseModel
 from models.conv_rnn import ConvRNN
+from models.conv_long_rnn import ConvLongRNN
 from utils.loss_functions import BCELoss, WeightedBCELoss, FocalLoss
+from sklearn.metrics import roc_auc_score
 
 class ClassificationModule(LightningModule):
-    def __init__(self, name: str, epochs: int, lr: float, optimizer: str, scheduler: str, weight_decay: float, lf:str, pos_weight:float, dropout: float, alpha_fl:float, gamma_fl:float, rnn_type: str, experiment_name: str, version: int):
+    def __init__(self, name: str, epochs: int, lr: float, optimizer: str, scheduler: str, weight_decay: float, lf:str, pos_weight:float, dropout: float, alpha_fl:float, gamma_fl:float, rnn_type: str, experiment_name: str, version: int, augmentation_techniques: list, p_augmentation: float, p_augmentation_per_technique: float):
         super().__init__()
         self.save_hyperparameters()
         self.name = name
@@ -21,6 +23,8 @@ class ClassificationModule(LightningModule):
             self.model = BaseModel(dropout=dropout)
         elif 'conv_rnn' in name:
             self.model = ConvRNN(dropout=dropout, rnn_type=rnn_type)
+        elif 'conv_long_rnn' in name:
+            self.model = ConvLongRNN(dropout)
         else:
             raise ValueError(f'Network {name} not available.')
 
@@ -37,6 +41,9 @@ class ClassificationModule(LightningModule):
         self.pos_weight = pos_weight
         self.experiment_name = experiment_name
         self.version = version
+        self.augmentation_techniques = augmentation_techniques
+        self.p_augmentation = p_augmentation
+        self.p_augmentation_per_technique = p_augmentation_per_technique
         
         if lf == "bce":
             self.lf = BCELoss()
@@ -90,7 +97,7 @@ class ClassificationModule(LightningModule):
 
     def validation_step(self, batch):
         mr, rd, clinic_data, label = batch
-        prediction = self(mr, rd, clinic_data)
+        prediction = torch.sigmoid(self(mr, rd, clinic_data))
         loss = self.loss_function(prediction, label)
         self.log('val_loss', loss.item(), logger=True, prog_bar=True, on_step=False, on_epoch=True)
         
@@ -126,7 +133,7 @@ class ClassificationModule(LightningModule):
         true_labels = [vo[1] for vo in validation_outputs]
         
         thresholds = np.arange(0.0, 1.0, 0.05)
-        best_threshold = 0.5
+        best_t_f1 = 0.5
         best_f1 = 0
 
         for t in thresholds:
@@ -140,9 +147,20 @@ class ClassificationModule(LightningModule):
 
             if f1_score > best_f1:
                 best_f1 = f1_score
-                best_threshold = t
+                best_t_f1 = t
+                
+        fpr, tpr, thresholds = roc_curve(true_labels, pred_probs)
+
+        # 1. Maximizing Youden's J statistic (J = TPR - FPR)
+        youden_j = tpr - fpr
+        best_threshold_index_j = np.argmax(youden_j)
+        best_t_j = thresholds[best_threshold_index_j]
         
-        return best_threshold
+        distances = np.sqrt((1 - tpr)**2 + fpr**2)
+        best_threshold_index_dist = np.argmin(distances)
+        best_t_roc = thresholds[best_threshold_index_dist]
+        
+        return ['f1', 'j', 'roc'], [best_t_f1, best_t_j, best_t_roc]
 
     def on_test_epoch_end(self):        
             
@@ -152,29 +170,37 @@ class ClassificationModule(LightningModule):
             with open(validation_outputs_path, 'rb') as f:
                 validation_outputs, min_loss = pickle.load(f)
         
-        t = self.choose_best_threshold(validation_outputs)
+        names, thresholds = self.choose_best_threshold(validation_outputs)
         
-        pred_labels = np.array([1 if (prediction).cpu().item() >= t else 0 for prediction, _, _ in self.test_outputs])
-        true_labels = np.array([int(label.cpu().item()) for _, label, _ in self.test_outputs])
+        for name, t in zip(names, thresholds):
         
-        C = confusion_matrix(true_labels, pred_labels)
+            pred_labels = np.array([1 if (prediction).cpu().item() >= t else 0 for prediction, _, _ in self.test_outputs])
+            true_labels = np.array([int(label.cpu().item()) for _, label, _ in self.test_outputs])
+            
+            C = confusion_matrix(true_labels, pred_labels)
 
-        TP, TN, FP, FN = C[1,1], C[0,0], C[0,1], C[1,0]
+            TP, TN, FP, FN = C[1,1], C[0,0], C[0,1], C[1,0]
 
-        accuracy = (TP + TN) / (TP + TN + FP + FN)
-        sensitivity = TP / (TP + FN)
-        specificity = TN / (TN + FP)
-        precision = TP / (TP + FP)
-        f1_score = 2 * (precision * sensitivity) / (precision + sensitivity)
-        
-        self.log('test_accuracy', accuracy, logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        
-        self.log('threshold', t, logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        
-        self.log('test_precision', precision, logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('test_sensitivity', sensitivity, logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('test_specificity', specificity, logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('test_f1', f1_score, logger=True, prog_bar=True, on_step=False, on_epoch=True)
+            accuracy = (TP + TN) / (TP + TN + FP + FN)
+            recall = TP / (TP + FN)
+            specificity = TN / (TN + FP)
+            precision = TP / (TP + FP)
+            f1_score = 2 * (precision * recall) / (precision + recall)
+            auc_roc = roc_auc_score(true_labels, pred_labels)
+            
+            self.log(f'{name}_t\n', t, logger=True, prog_bar=True, on_step=False, on_epoch=True)
+            
+            self.log(f'{name}_Accuracy', accuracy, logger=True, prog_bar=False, on_epoch=True)
+            self.log(f'{name}_AUC', auc_roc, logger=True, prog_bar=False, on_epoch=True)
+            
+            self.log(f'{name}_Precision', precision, logger=True, prog_bar=False, on_epoch=True)
+            
+            self.log(f'{name}_Recall', recall, logger=True, prog_bar=False, on_epoch=True)
+            self.log(f'{name}_Specificity', specificity, logger=True, prog_bar=False, on_epoch=True)
+            
+            self.log(f'{name}_F1', f1_score, logger=True, prog_bar=False, on_epoch=True)
+            
+            print()
 
         pred_probs = np.array([prediction.cpu().item() for prediction, _, _ in self.test_outputs])
         fpr, tpr, thresholds = roc_curve(true_labels, pred_probs)
@@ -230,7 +256,7 @@ class ClassificationModule(LightningModule):
         
         elif self.scheduler == 'plateau':
             print("Using ReduceLROnPlateau scheduler")
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizers, mode='min', factor=0.1, patience=2, min_lr=1e-12)
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizers, mode='min', factor=0.1, patience=1, min_lr=1e-12)
             return  {
                         'optimizer': optimizers,
                         'lr_scheduler': scheduler,

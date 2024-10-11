@@ -7,17 +7,19 @@ model:
   optimizer: adam
   scheduler: plateau
   #patience: 1
-  learning_rate: 1e-4
-  weight_decay: 1e-6
-  rnn_type: rnn  #rnn, lstm, gru, gru2, transformer
-  dropout: .3
+  learning_rate: 5e-5
+  weight_decay: 1e-2
+  rnn_type: gru2  #rnn, lstm, gru, gru2
+  dropout: .5
   only_test: False
 
   lf: bce          #wbce, bce, fl
-  alpha_fl: .915
-  gamma_fl: 2
+  alpha_fl: .7
+  gamma_fl: 3
   pos_weight: 6
-  dropout: .3
+  augmentation_techniques: ['shear', 'flip', 'gaussian_noise', 'brightness']
+  p_augmentation: .8
+  p_augmentation_per_technique: .3
 logger:
   log_dir: ./log
   experiment_name: train_conv_rnn

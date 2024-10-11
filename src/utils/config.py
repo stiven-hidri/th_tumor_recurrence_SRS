@@ -21,9 +21,13 @@ class ModelConfig(BaseModel):
     optimizer: str
     scheduler: str
     only_test: bool
+    augmentation_techniques: list
+    p_augmentation: float
+    p_augmentation_per_technique : float
     save_images: Optional[Path] = None
     pretrained: Optional[Path] = None
     annotations: Optional[Path] = None
+    
 
 class LoggerConfig(BaseModel):
     log_dir: Path

@@ -5,9 +5,9 @@ from torch.utils.data import DataLoader
 from utils import Parser
 from datasets import ClassifierDataset
 from modules import ClassificationModule
+from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 import yaml
 import os
-
 
 if __name__ == '__main__':
     # Get configuration arguments
@@ -44,7 +44,10 @@ if __name__ == '__main__':
             optimizer=config.model.optimizer, 
             scheduler=config.model.scheduler,
             experiment_name=config.logger.experiment_name,
-            version=config.logger.version
+            version=config.logger.version,
+            augmentation_techniques = config.model.augmentation_techniques,
+            p_augmentation = config.model.p_augmentation,
+            p_augmentation_per_technique = config.model.p_augmentation_per_technique
         )
     else:
         module = ClassificationModule.load_from_checkpoint(
@@ -63,7 +66,10 @@ if __name__ == '__main__':
             optimizer=config.model.optimizer,
             scheduler=config.model.scheduler,
             experiment_name=config.logger.experiment_name,
-            version=config.logger.version
+            version=config.logger.version,
+            augmentation_techniques = config.model.augmentation_techniques,
+            p_augmentation = config.model.p_augmentation,
+            p_augmentation_per_technique = config.model.p_augmentation_per_technique
         )
 
     # Set callback function to save checkpoint of the model
@@ -76,6 +82,8 @@ if __name__ == '__main__':
         mode=config.checkpoint.mode,
     )
 
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=2, verbose=False, mode="min")
+
     # Instantiate a trainer
     trainer = Trainer(
         logger=logger,
@@ -84,7 +92,7 @@ if __name__ == '__main__':
         default_root_dir=config.logger.log_dir,
         max_epochs=config.model.epochs,
         check_val_every_n_epoch=1,
-        callbacks=[checkpoint_cb],
+        callbacks=[checkpoint_cb, early_stop_callback],
         log_every_n_steps=1,
         num_sanity_val_steps=0, # Validation steps at the very beginning to check bugs without waiting for training
         reload_dataloaders_every_n_epochs=1,  # Reload the dataset to shuffle the order
@@ -100,4 +108,4 @@ if __name__ == '__main__':
         module = ClassificationModule.load_from_checkpoint(name=config.model.name, checkpoint_path=best_checkpoint_path)
 
     # Test
-    trainer.test(model=module, dataloaders=test_dataloader)
+    results = trainer.test(model=module, dataloaders=test_dataloader)
