@@ -9,7 +9,7 @@ model:
   #patience: 1
   learning_rate: 5e-5
   weight_decay: 1e-2
-  rnn_type: gru2  #rnn, lstm, gru, gru2
+  rnn_type: rnn  #rnn, lstm, gru, gru2
   dropout: .5
   only_test: False
 

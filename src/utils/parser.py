@@ -17,7 +17,7 @@ class Parser:
         # General data args
         self.parser.add_argument('--lr', type=float, help='Learning rate', dest='LR')
         self.parser.add_argument('--weight_decay', type=float, help='Weight decay', dest='WEIGHT_DECAY')
-        self.parser.add_argument('--rnn_type', type=float, help='Weight decay', dest='RNN_TYPE')
+        self.parser.add_argument('--rnn_type', type=str, help='Weight decay', dest='RNN_TYPE')
         self.parser.add_argument('--alpha_fl', type=float, help='Alpha focal loss', dest='ALPHA_FL')
         self.parser.add_argument('--gamma_fl', type=float, help='Gamma focal loss', dest='GAMMA_FL')
         self.parser.add_argument('--lf', type=float, help='Loss function acronym', dest='LF')

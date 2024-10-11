@@ -96,8 +96,8 @@ if __name__ == '__main__':
         )
 
         # Train
-        # if not config.model.only_test:
-            # trainer.fit(model=module, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
+        if not config.model.only_test:
+            trainer.fit(model=module, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
         # Test
 
@@ -146,7 +146,7 @@ if __name__ == '__main__':
     # Convert the results list to a pandas DataFrame
     df_results = pd.DataFrame(results_list)
 
-    df_results.to_csv(os.path.join(os.path.dirname(__file__), f"bce_na_bm_results.csv"), index=False)
+    df_results.to_csv(os.path.join(os.path.dirname(__file__), f"bce_con_rnn_results.csv"), index=False)
 
     best_results = df_results.sort_values(by=['f1_Precision', 'j_Precision', 'roc_Precision'], ascending=False)
     print("Top performing configurations:\n", best_results.head())
