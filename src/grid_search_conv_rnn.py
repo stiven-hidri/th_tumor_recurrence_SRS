@@ -39,7 +39,7 @@ if __name__ == '__main__':
     train_split, val_split, test_split = classifier_dataset.create_splits()
     
     for i, (lr, batch_size, dropout, weight_decay) in enumerate(all_param_combinations):
-        print(f"{i+1}\{max_cnt}:\tTraining with lr={lr}, batch_size={batch_size}, dropout={dropout}, weight_decay={weight_decay}")
+        print(f"{i+1}/{max_cnt}:\tTraining with lr={lr}, batch_size={batch_size}, dropout={dropout}, weight_decay={weight_decay}")
             
         train_dataloader = DataLoader(train_split, batch_size=batch_size, shuffle=True, num_workers=4, persistent_workers=True)
         val_dataloader = DataLoader(val_split, batch_size=batch_size, num_workers=4, persistent_workers=True)

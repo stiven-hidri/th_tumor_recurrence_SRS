@@ -1,6 +1,5 @@
 import torch
 import numpy as np
-import elasticdeform
 import SimpleITK as sitk
 import random
 
@@ -40,20 +39,6 @@ def brightness(mr, rtd):
     rtd_new = torch.Tensor(rtd_new).to(torch.float32)
 
     return mr_new, rtd_new
-
-def elastic(mr, rtd):
-    """
-    Elastic deformation on a image and its target
-    """
-    
-    mr, rtd = mr.numpy(), rtd.numpy()
-
-    [mr, rtd] = elasticdeform.deform_random_grid([mr, rtd], sigma=1.5, axis=[(0, 1, 2), (0, 1, 2)], order=[4, 4], mode='nearest', points=3)
-    
-    mr = torch.Tensor(mr).to(torch.float32)
-    rtd = torch.Tensor(rtd).to(torch.float32)
-    
-    return mr, rtd 
 
 def shear(mr, rtd):
     # Step 1: Convert tensor to SimpleITK Image
