@@ -6,7 +6,7 @@ from .rnn import RNNModel, LSTMModel, GRUModel, GRUModel_atn
 
 
 class ConvRNN(nn.Module):
-    def __init__(self, rnn_type='rnn', dropout = .1):
+    def __init__(self, rnn_type='rnn', hidden_size=256, dropout = .1):
         super(ConvRNN, self).__init__()
         
         self.backbone = generate_model(10) # [10, 18, 34, 50, 101, 152, 200]
@@ -15,15 +15,13 @@ class ConvRNN(nn.Module):
         self.backbone.fc = nn.Identity()
 
         if rnn_type == 'rnn':
-            self.rnn = RNNModel(512, hidden_dim=256, layer_dim=1, output_dim=1, dropout_prob=dropout)
+            self.rnn = RNNModel(512, hidden_dim=hidden_size, layer_dim=1, output_dim=1, dropout_prob=dropout)
         elif rnn_type == 'lstm':
-            self.rnn = LSTMModel(512, hidden_dim=256, layer_dim=1, output_dim=1, dropout_prob=dropout)
+            self.rnn = LSTMModel(512, hidden_dim=hidden_size, layer_dim=1, output_dim=1, dropout_prob=dropout)
         elif rnn_type == 'gru':
-            self.rnn = GRUModel(512, hidden_dim=256, layer_dim=1, output_dim=1, dropout_prob=dropout)
+            self.rnn = GRUModel(512, hidden_dim=hidden_size, layer_dim=1, output_dim=1, dropout_prob=dropout)
         elif rnn_type == 'gru2':
-            self.rnn = GRUModel_atn(512, hidden_dim=256, layer_dim=1, output_dim=1, dropout_prob=dropout)
-            
-        
+            self.rnn = GRUModel_atn(512, hidden_dim=hidden_size, layer_dim=1, output_dim=1, dropout_prob=dropout)
     
     def forward(self, mr, rtd):
         

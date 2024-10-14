@@ -30,33 +30,15 @@ class ConvLongRNN(nn.Module):
         super(ConvLongRNN, self).__init__()
         
         self.inception_v2 = InceptionV2Features()
-        self.lstm = nn.LSTM(input_size=2048,  # Assumes InceptionV2 outputs 2048 features
-                            hidden_size=hidden_size, 
-                            num_layers=num_layers, 
-                            batch_first=True,
-                            dropout=dropout)
+        self.lstm = nn.LSTM(
+            input_size=2048,  # Assumes InceptionV2 outputs 2048 features
+            hidden_size=hidden_size, 
+            num_layers=num_layers, 
+            batch_first=True,
+            dropout=dropout
+        )
 
         self.fc = nn.Linear(hidden_size, output_dim)  # Binary classification (recurrence or stability)
-        
-    # def forward(self, mr, rtd):
-        
-    #     mr = mr.unsqueeze(1)
-    #     rtd = rtd.unsqueeze(1)
-        
-    #     batch_size = mr.size()[0]
-            
-    #     combined_features = [ self.inception_v2(torch.cat((mr[b, :, :, :, :], rtd[b, :, :, :, :]), dim=1)) for b in range(batch_size)]
-
-    #     data_tensor = torch.stack(combined_features, dim=0)
-        
-    #     data_tensor = data_tensor.squeeze(2)
-    #     data_tensor = data_tensor.view(data_tensor.size(0), data_tensor.size(1), -1) 
-        
-    #     lstm_out, _ = self.lstm(data_tensor)
-        
-    #     output = self.fc(lstm_out[:, -1, :])
-        
-    #     return output
 
     def forward(self, mr, rtd):
         # Unsqueeze along the channel dimension to prepare for concatenation
@@ -66,25 +48,17 @@ class ConvLongRNN(nn.Module):
         # Concatenate along the channel dimension (now the tensor has 2 channels)
         combined = torch.cat((mr, rtd), dim=1)  # Shape: [batch_size, 2, 40, 40, 40]
 
-        # Reshape to process each 40x40 slice as a 2D image
-        # Permute to move the slice dimension to the batch dimension
-        # (batch_size * num_slices, num_channels, height, width)
         batch_size = combined.size(0)
         num_slices = combined.size(2)
         
         combined = combined.permute(0, 2, 1, 3, 4).contiguous()  # Shape: [batch_size, 40, 2, 40, 40]
         combined = combined.view(-1, 2, 40, 40).squeeze()  # Shape: [batch_size * 40, 2, 40, 40]
 
-        # Feed the entire batch of 2D slices to InceptionV2
         combined_features = self.inception_v2(combined)  # Shape: [batch_size * 40, 512, h', w']
 
-        # Reshape back to (batch_size, num_slices, features)
         combined_features = combined_features.view(batch_size, num_slices, -1)  # Shape: [batch_size, 40, feature_size]
-
-        # Feed into the LSTM
         lstm_out, _ = self.lstm(combined_features)  # Shape: [batch_size, num_slices, hidden_size]
 
-        # Get the output of the last time step
         output = self.fc(lstm_out[:, -1, :])  # Shape: [batch_size, output_size]
 
         return output

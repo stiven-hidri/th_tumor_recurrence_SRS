@@ -7,12 +7,12 @@ import numpy as np
 from lightning.pytorch import LightningModule
 from models.base_model import BaseModel
 from models.conv_rnn import ConvRNN
-from models.conv_long_rnn import ConvLongRNN
+from models.conv_long_lstm import ConvLongRNN
 from utils.loss_functions import BCELoss, WeightedBCELoss, FocalLoss
 from sklearn.metrics import roc_auc_score
 
 class ClassificationModule(LightningModule):
-    def __init__(self, name: str, epochs: int, lr: float, optimizer: str, scheduler: str, weight_decay: float, lf:str, pos_weight:float, dropout: float, alpha_fl:float, gamma_fl:float, rnn_type: str, experiment_name: str, version: int, augmentation_techniques: list, p_augmentation: float, p_augmentation_per_technique: float):
+    def __init__(self, name: str, epochs: int, lr: float, optimizer: str, scheduler: str, weight_decay: float, lf:str, pos_weight:float, dropout: float, alpha_fl:float, gamma_fl:float, rnn_type: str, hidden_size: int, experiment_name: str, version: int, augmentation_techniques: list, p_augmentation: float, p_augmentation_per_technique: float):
         super().__init__()
         self.save_hyperparameters()
         self.name = name
@@ -22,9 +22,9 @@ class ClassificationModule(LightningModule):
         if 'base_model' in name:
             self.model = BaseModel(dropout=dropout)
         elif 'conv_rnn' in name:
-            self.model = ConvRNN(dropout=dropout, rnn_type=rnn_type)
+            self.model = ConvRNN(dropout=dropout, rnn_type=rnn_type, hidden_size=hidden_size)
         elif 'conv_long_rnn' in name:
-            self.model = ConvLongRNN(dropout)
+            self.model = ConvLongRNN(dropout=dropout, hidden_size=hidden_size)
         else:
             raise ValueError(f'Network {name} not available.')
 
@@ -35,6 +35,7 @@ class ClassificationModule(LightningModule):
         self.scheduler = scheduler
         self.weight_decay = weight_decay
         self.rnn_type = rnn_type
+        hidden_size = hidden_size
         self.alpha_fl = alpha_fl
         self.gamma_fl = gamma_fl
         self.dropout = dropout
@@ -58,7 +59,7 @@ class ClassificationModule(LightningModule):
 
     def forward(self, mr, rtd, clinic_data):
         if self.name == 'base_model':
-            y = self.model(mr, rtd)
+            y = self.model(mr, rtd, clinic_data)
         else:
             y = self.model(mr, rtd)
             

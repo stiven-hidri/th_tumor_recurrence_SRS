@@ -2,15 +2,15 @@ dataset:
   name: name
 model:
   name: conv_long_rnn
-  epochs: 25
-  batch_size: 4
+  epochs: 50
+  batch_size: 16
   optimizer: adam
   scheduler: plateau
-  rnn_type: None
-  #patience: 1
+  rnn_type: none
+  hidden_size: 128
   learning_rate: 1e-5
-  weight_decay: 1e-3
-  dropout: .3
+  weight_decay: 1e-5
+  dropout: .5
   only_test: False
 
   lf: bce          #wbce, bce, fl

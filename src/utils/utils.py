@@ -28,12 +28,11 @@ def clear_directory_content(PATH):
 def rm_pss(s, delim='_'):
     return delim.join(c for c in s if c.isalnum())
 
-parts_to_remove_prim = ['in', 'of', 'the', 'left','rt','breast', 'er', 'pr', 'her', 'invasive', 'ovarian', 'urothelial', 'lung', 'large', 'small', 'squamous']
+parts_to_remove_prim = ['in', 'of', 'the', 'left','rt','breast', 'er', 'pr', 'her', 'invasive', 'ovarian', 'urothelial', 'lung', 'endometrial', "esophageal", "neuroendocrine", "endometrioid"]
 def process_prim(text):
     text = re.sub(r'[^a-zA-Z]+', ' ', text).lower().strip()
     text = text.replace('adenocarcinoma of the lung squamous cell carcinoma','')
     text = text.replace('unspecified breast cancer','')
-    text = text.replace('non small', '')
     text = text.replace('renal cell', '')
     text = text.replace('renal cell', '')
     parts = [part for part in text.split(' ') if part not in parts_to_remove_prim]
@@ -44,17 +43,23 @@ def process_prim(text):
 parts_to_remove_mets = ['urothelial', 'with', 'large', 'frontal', 'met', 'ca', 'cell', 'mets']
 
 def process_mets(text):
+    text = text.replace('Brain Mets - Urothelial','renal')
     text = re.sub(r'[^a-zA-Z]+', ' ', text).lower().strip()
     text = text.replace('gk brain mets lesions','')
     text = text.replace('large cell','')
+    text = text.replace('kidney','renal')
     text = text.replace('post op cavity','')
     text = text.replace('brain mets','')
     text = text.replace('brain met','')
-    text = text.replace('endometrial','uterine')
+    text = text.replace('endometrial','uterus')
     text = text.replace('rcc','renal')
     parts = [part for part in text.split(' ') if part not in parts_to_remove_mets]
     text = ' '.join(parts)
     text = ' '.join(text.split()).strip()
+    text = text.replace('melanoma','skin')
+    text = text.replace('uterine','uterus')
+    text = text.replace('esophageal','esophagus')
+    text = text.replace('renal','urinary_system')
     return text
     
 mapping_roi = {
@@ -89,7 +94,6 @@ mapping_roi = {
     "med": "medial",
     "mesial": "medial",
     "median": "medial",
-    "medial": "medial",
     "occip": "occipital",
     "occ": "occipital",
     "occi": "occipital",
@@ -102,8 +106,8 @@ mapping_roi = {
     "vetrtex": "vertex",
     "calv": "calvarium",
     "fourthventr": "fourth_ventricle",
-    "motor": "motor_cortex",
-    "premotor": "premotor_cortex",
+    "motor": "frontal",
+    "premotor": "frontal",
     "corr": "corrected",
     "post": "posterior",
     "cav": "cavity",
@@ -112,14 +116,43 @@ mapping_roi = {
     "ventr": "ventricle",
     "cortex": "",
     "met": "",
-    "insula": "insular",
     "su": "superior",
-    "parame": "paramedian",
-    "op": "",
+    "parame": "medial",
+    "op": "occipital",
     "int": "internal",
     "deep": "",
-    "lesion":""
+    "lesion":"",
+    "hippocampal" : "temporal",
+    "postcentral": "parietal",
+    "vertex": "parietal",
+    "pontine": "pons",
+    "atrium": "ventricle",
+    "fourth": "",
+    "thalmic": "thalamus",
+    "vermis": "vermis",
+    "insular": "insula",
+    "paramedian": "medial",
 }
+
+roi_to_keep = [ 
+    'left', 
+    'right', 
+    'cerebellar', 
+    'frontal',
+    'temporal', 
+    'parietal', 
+    'medial', 
+    'occipital', 
+    'capsule', 
+    "tent", 
+    "pons", 
+    "ventricle", 
+    "putamen", 
+    "occipital_tent", 
+    "insula",
+    "thalamus",
+    "vermis"
+]
     
 def process_roi(text):
     if not isinstance(text, str):
@@ -135,16 +168,29 @@ def process_roi(text):
     
     text = text.replace(' re tx', '')
         
-    text = text.replace('frontal pole', 'prefrontal')
+    text = text.replace('frontal pole', 'frontal')
         
-    text = text.replace('frontal pre', 'prefrontal')
+    text = text.replace('frontal pre', 'frontal')
     
-    text = text.replace('para medial', 'paramedian')
-    
+    text = text.replace('para median', 'medial')
+        
     parts = [ part if part not in mapping_roi.keys() else mapping_roi[part] for part in text.split(' ') ]
     
     result = ' '.join(parts).strip()
+    
+    if 'medial' in result and ('parietal' in result or 'cerebellar' in result or 'occipital' in result or 'frontal' in result or 'temporal' in result):
+        result = result.replace('medial', '')
+        
+    if 'vermis' in result:
+        result = "vermis"
+    
     result = ' '.join(result.split()).strip()
+    
+    result = result.replace('posterior central', 'parietal')
+    result = result.replace('corpus callo', 'medial')
+    result = result.replace('occipital tent', 'occipital_tent')
+    
+    result = ' '.join([part for part in result.split() if part in roi_to_keep])
     
     return result
 

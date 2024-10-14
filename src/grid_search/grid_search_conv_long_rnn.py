@@ -15,8 +15,8 @@ import os
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 param_grid = {
-    'learning_rate': [1e-4, 5e-5, 1e-5],
-    'batch_size': [8, 16, 32, 64],
+    'learning_rate': [1e-4, 1e-5],
+    'batch_size': [2, 4, 8, 16],
     'dropout': [0.3, 0.5, 0.7],
     'weight_decay': [1e-5, 1e-4, 1e-3],
 }
@@ -30,11 +30,7 @@ if __name__ == '__main__':
     version = int(config.logger.version)
     
     all_param_combinations = list(product(param_grid['learning_rate'], param_grid['batch_size'], param_grid['dropout'], param_grid['weight_decay']))
-    start = len(all_param_combinations)-99
-    end = 99
-    print(start)
-    
-    all_param_combinations = all_param_combinations[:end+1]
+
     max_cnt = len(list(all_param_combinations))
     # Iterate over all combinations of hyperparameters
     
@@ -43,7 +39,7 @@ if __name__ == '__main__':
     train_split, val_split, test_split = classifier_dataset.create_splits()
     
     for i, (lr, batch_size, dropout, weight_decay) in enumerate(all_param_combinations):
-        print(f"{i+1}\{max_cnt}:\tTraining with lr={lr}, batch_size={batch_size}, dropout={dropout}, weight_decay={weight_decay}")
+        print(f"{i+1}/{max_cnt}:\tTraining with lr={lr}, batch_size={batch_size}, dropout={dropout}, weight_decay={weight_decay}")
             
         train_dataloader = DataLoader(train_split, batch_size=batch_size, shuffle=True, num_workers=4, persistent_workers=True)
         val_dataloader = DataLoader(val_split, batch_size=batch_size, num_workers=4, persistent_workers=True)
@@ -59,6 +55,7 @@ if __name__ == '__main__':
             lr=lr,
             weight_decay=weight_decay,
             rnn_type=config.model.rnn_type,
+            hidden_size= config.model.hidden_size,
             alpha_fl=config.model.alpha_fl,
             gamma_fl=config.model.gamma_fl,
             lf=config.model.lf,
@@ -100,8 +97,8 @@ if __name__ == '__main__':
         )
 
         # Train
-        # if not config.model.only_test:
-            # trainer.fit(model=module, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
+        if not config.model.only_test:
+            trainer.fit(model=module, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
         # Test
 
@@ -150,7 +147,7 @@ if __name__ == '__main__':
     # Convert the results list to a pandas DataFrame
     df_results = pd.DataFrame(results_list)
 
-    df_results.to_csv(os.path.join(os.path.dirname(__file__), f"bce_na_bm_results.csv"), index=False)
+    df_results.to_csv(os.path.join(os.path.dirname(__file__), '..', 'results_csv', f"bce_conv_long_rnn_results.csv"), index=False)
 
     best_results = df_results.sort_values(by=['f1_Precision', 'j_Precision', 'roc_Precision'], ascending=False)
     print("Top performing configurations:\n", best_results.head())

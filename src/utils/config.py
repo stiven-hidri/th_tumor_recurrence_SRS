@@ -13,6 +13,7 @@ class ModelConfig(BaseModel):
     learning_rate: float
     weight_decay: float
     rnn_type: str
+    hidden_size: int
     alpha_fl:float
     gamma_fl: float
     lf:str
