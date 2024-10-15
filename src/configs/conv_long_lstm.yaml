@@ -1,16 +1,16 @@
 dataset:
   name: name
 model:
-  name: conv_long_rnn
-  epochs: 50
-  batch_size: 16
+  name: conv_long_rnn_cd
+  epochs: 100
+  batch_size: 8
   optimizer: adam
-  scheduler: plateau
+  scheduler: constant
   rnn_type: none
-  hidden_size: 128
-  learning_rate: 1e-5
+  hidden_size: 45
+  learning_rate: 1e-4
   weight_decay: 1e-5
-  dropout: .5
+  dropout: .3
   only_test: False
 
   lf: bce          #wbce, bce, fl
@@ -22,7 +22,7 @@ model:
   p_augmentation_per_technique: .3
 logger:
   log_dir: ./log
-  experiment_name: train_base_model
+  experiment_name: conv_long_lstm_1_cd
   version: 1
 checkpoint:
   monitor: val_loss

@@ -43,11 +43,11 @@ class BaseModel(nn.Module):
         self.dose_fc2 = nn.Linear(512, 128)
         
         # Clinical input branch
-        self.clinical_fc1 = nn.Linear(116, 64)  # Placeholder for dynamic input layer
+        self.clinical_fc1 = nn.Linear(48, 10)  # Placeholder for dynamic input layer
         # self.clinical_fc2 = nn.Linear(64, 32)  # Placeholder for dynamic input layer
         
         # Final output layer
-        self.final_fc = nn.Linear(128 * 2 + 64, 1)
+        self.final_fc = nn.Linear(128 * 2 + 10, 1)
         # self.final_fc = nn.Linear(128 * 2, 1)
         
         # Xavier initialization
@@ -104,7 +104,7 @@ class BaseModel(nn.Module):
         if self.clinical_fc1.in_features != clinical_input.size(1):
             # Create the linear layer dynamically based on the input size
             num_features = clinical_input.size(1)  # Get number of features dynamically
-            self.clinical_fc1 = nn.Linear(num_features, 64)  # Initialize layer with dynamic input size
+            self.clinical_fc1 = nn.Linear(num_features, 10)  # Initialize layer with dynamic input size
             
         
         # Clinical branch

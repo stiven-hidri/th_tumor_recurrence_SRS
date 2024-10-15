@@ -1,66 +1,103 @@
 import torch
 import torch.nn as nn
 import torchvision.models as models
-
-# InceptionV2 Feature Extractor
+import timm
+from torchvision.models import shufflenet_v2_x1_5
 class InceptionV2Features(nn.Module):
-    def __init__(self):
+    def __init__(self, inception_v2_is_chosen=False, out_features=256):
         super(InceptionV2Features, self).__init__()
-        resnet = models.resnet18(pretrained=True)
         
-        # Modify the first convolutional layer to accept 2-channel input instead of 3-channel RGB
-        resnet.conv1 = nn.Conv2d(
-            in_channels=2,  # 2 channels for MR and RTD
-            out_channels=64,
-            kernel_size=7,
-            stride=2,
-            padding=3,
-            bias=False
-        )
+        self.inception_v2_is_chosen = inception_v2_is_chosen
         
-        # Remove the classifier layers (we only need the feature extractor part)
-        self.feature_extractor = nn.Sequential(*list(resnet.children())[:-2])
+        if self.inception_v2_is_chosen:
+        
+            self.backbone = timm.create_model('inception_resnet_v2', pretrained=False, num_classes=0)
+            
+            self.backbone.conv2d_1a.conv = nn.Conv2d(
+                in_channels=2,  # Change from 3 to 2 channels
+                out_channels=self.backbone.conv2d_1a.conv.out_channels,
+                kernel_size=(3, 3),
+                stride=(1, 1),
+                padding=(1, 1),
+                bias=self.backbone.conv2d_1a.conv.bias
+            )
+            
+            self.fc = nn.Linear(self.backbone.conv2d_7b.conv.out_channels, out_features)
+        else:
+            self.backbone = shufflenet_v2_x1_5()
+            
+            self.backbone.conv1[0] = nn.Conv2d(2, 24, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+            
+            # self.backbone.conv1 = nn.Conv2d(
+            #     in_channels=2,  # Change to 2 for grayscale
+            #     out_channels=self.backbone.conv1.out_channels,
+            #     kernel_size=(7, 7),
+            #     stride=(2, 2),
+            #     padding=(3, 3),
+            #     bias=False
+            # )
+            
+            # # Remove the final fully connected layer
+            self.fc = nn.Linear(self.backbone.fc.in_features, out_features)
+            self.backbone.fc = nn.Identity()
 
     def forward(self, x):
-        return self.feature_extractor(x)
+        return self.fc(self.backbone(x))
 
 # LSTM Model
 class ConvLongRNN(nn.Module):
-    def __init__(self, dropout:.3, hidden_size=128, num_layers = 1, output_dim=1):
+    def __init__(self, dropout:.3, hidden_size=45, num_layers = 2, output_dim=1, out_features=256, input_clinical_data = 48, output_clinical_data = 10, inception_v2_is_chosen=False):
         super(ConvLongRNN, self).__init__()
         
-        self.inception_v2 = InceptionV2Features()
+        self.backbone = InceptionV2Features(out_features=out_features, inception_v2_is_chosen=inception_v2_is_chosen)
         self.lstm = nn.LSTM(
-            input_size=2048,  # Assumes InceptionV2 outputs 2048 features
+            input_size=out_features+output_clinical_data,  # Assumes InceptionV2 outputs 2048 features
             hidden_size=hidden_size, 
             num_layers=num_layers, 
             batch_first=True,
             dropout=dropout
         )
+        
+        self.fc_clinical_data = nn.Linear(input_clinical_data, output_clinical_data)
 
         self.fc = nn.Linear(hidden_size, output_dim)  # Binary classification (recurrence or stability)
 
-    def forward(self, mr, rtd):
-        # Unsqueeze along the channel dimension to prepare for concatenation
-        mr = mr.unsqueeze(1)  # Shape: [batch_size, 1, 40, 40, 40]
-        rtd = rtd.unsqueeze(1)  # Shape: [batch_size, 1, 40, 40, 40]
-
-        # Concatenate along the channel dimension (now the tensor has 2 channels)
-        combined = torch.cat((mr, rtd), dim=1)  # Shape: [batch_size, 2, 40, 40, 40]
-
-        batch_size = combined.size(0)
-        num_slices = combined.size(2)
+    def forward(self, mr, rtd, clinical_data):
         
-        combined = combined.permute(0, 2, 1, 3, 4).contiguous()  # Shape: [batch_size, 40, 2, 40, 40]
-        combined = combined.view(-1, 2, 40, 40).squeeze()  # Shape: [batch_size * 40, 2, 40, 40]
+        batch_size, depth, height, width = mr.shape
+        channels = 2
+        
+        combined = torch.stack([mr, rtd], dim=2).view(-1, channels, height, width)
 
-        combined_features = self.inception_v2(combined)  # Shape: [batch_size * 40, 512, h', w']
+        features = self.backbone(combined).view(batch_size, depth, -1)
+        features_clinical_data = torch.relu(self.fc_clinical_data(clinical_data)).unsqueeze(1).repeat(1, depth, 1)
+        
+        final_features = torch.cat((features, features_clinical_data), dim=-1)
 
-        combined_features = combined_features.view(batch_size, num_slices, -1)  # Shape: [batch_size, 40, feature_size]
-        lstm_out, _ = self.lstm(combined_features)  # Shape: [batch_size, num_slices, hidden_size]
+        lstm_out, _ = self.lstm(final_features)
 
-        output = self.fc(lstm_out[:, -1, :])  # Shape: [batch_size, output_size]
+        output = self.fc(lstm_out[:, -1, :])
 
         return output
+    
+    # def forward(self, mr, rtd):
+        
+    #     batch_size, depth, height, width = mr.shape
+        
+    #     combined = torch.stack([mr, rtd], dim=2)
+        
+    #     channels = combined.shape[2]
+        
+    #     reshaped_input = combined.view(-1, channels, height, width)
+
+    #     features = self.backbone(reshaped_input)
+
+    #     features = features.view(batch_size, depth, -1)
+
+    #     lstm_out, _ = self.lstm(features)
+
+    #     output = self.fc(lstm_out[:, -1, :])
+
+    #     return output
 
 

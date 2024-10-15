@@ -8,6 +8,7 @@ from lightning.pytorch import LightningModule
 from models.base_model import BaseModel
 from models.conv_rnn import ConvRNN
 from models.conv_long_lstm import ConvLongRNN
+from models.mlp_cd import MlpCD
 from utils.loss_functions import BCELoss, WeightedBCELoss, FocalLoss
 from sklearn.metrics import roc_auc_score
 
@@ -25,6 +26,8 @@ class ClassificationModule(LightningModule):
             self.model = ConvRNN(dropout=dropout, rnn_type=rnn_type, hidden_size=hidden_size)
         elif 'conv_long_rnn' in name:
             self.model = ConvLongRNN(dropout=dropout, hidden_size=hidden_size)
+        elif 'mlp_cd':
+            self.model = MlpCD(dropout=dropout)
         else:
             raise ValueError(f'Network {name} not available.')
 
@@ -58,7 +61,9 @@ class ClassificationModule(LightningModule):
         self.validation_losses = []
 
     def forward(self, mr, rtd, clinic_data):
-        if self.name == 'base_model':
+        if 'mlp_cd' in self.name:
+            y = self.model(clinic_data)
+        elif 'cd' in self.name:
             y = self.model(mr, rtd, clinic_data)
         else:
             y = self.model(mr, rtd)
@@ -242,14 +247,16 @@ class ClassificationModule(LightningModule):
         elif self.optimizer == 'sgd':
             print("Using SGD optimizer")
             optimizers = torch.optim.SGD(self.parameters(), lr = self.lr)
+            
+        ##Schedulers
         
         if self.scheduler == 'cosine':
             print("Using CosineAnnealingLR scheduler")
-            scheduler = [torch.optim.lr_scheduler.CosineAnnealingLR(optimizers, T_max=self.epochs, eta_min=1e-8,)]
+            scheduler = [torch.optim.lr_scheduler.CosineAnnealingLR(optimizers, T_max=self.epochs, eta_min=1e-8)]
         
         elif self.scheduler == 'step':
             print("Using StepLR scheduler")
-            scheduler = [torch.optim.lr_scheduler.StepLR(optimizers, step_size=10, gamma=0.1)]
+            scheduler = [torch.optim.lr_scheduler.StepLR(optimizers, step_size=25, gamma=0.5)]
             
         elif self.scheduler == 'exp':
             print("Using exp scheduler")
@@ -257,7 +264,16 @@ class ClassificationModule(LightningModule):
         
         elif self.scheduler == 'plateau':
             print("Using ReduceLROnPlateau scheduler")
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizers, mode='min', factor=0.1, patience=1, min_lr=1e-12)
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizers, mode='min', factor=0.1, patience=5, min_lr=1e-12)
+            return  {
+                        'optimizer': optimizers,
+                        'lr_scheduler': scheduler,
+                        'monitor': 'val_loss'
+                    }
+            
+        elif self.scheduler == 'constant':
+            print("Using constant scheduler")
+            scheduler = torch.optim.lr_scheduler.LambdaLR(optimizers, lr_lambda=lambda epoch: 1)
             return  {
                         'optimizer': optimizers,
                         'lr_scheduler': scheduler,

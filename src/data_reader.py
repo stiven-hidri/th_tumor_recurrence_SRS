@@ -14,8 +14,7 @@ from utils.utils import couple_roi_names, process_mets, process_prim, process_ro
 import SimpleITK as sitk
 import numpy as np
 import torch.nn.functional as F
-
-
+from scipy.spatial.distance import pdist, squareform
 
 class RawData_Reader():
     def __init__(self) -> None:
@@ -33,7 +32,7 @@ class RawData_Reader():
         self.clinic_data_cl = pd.read_excel(self.CLINIC_DATA_FILE_PATH, sheet_name='course_level')
         
         self.CLINIC_FEATURES_TO_DISCRETIZE = [0, 1, 3, 4]
-        self.CLINIC_FEATURES_TO_NORMALIZE = [2, 5]
+        self.CLINIC_FEATURES_TO_NORMALIZE = [2, 5, 6, 7]
         
         self.split_info = None
         
@@ -84,14 +83,17 @@ class RawData_Reader():
                 
                 mr, rtd = self.__get_mr_rtd_resampled__(path_MR, path_RTD)
                 
-                masks = self.__get_rts__(path_RTS, path_MR, subject_id, course)
+                masks_with_longest_diameter = self.__get_rts__(path_RTS, path_MR, subject_id, course)
+                
+                masks = { roi: mask_with_longest_diameter[0] for roi, mask_with_longest_diameter in masks_with_longest_diameter.items() }
+                longest_diameters = { roi: mask_with_longest_diameter[1] for roi, mask_with_longest_diameter in masks_with_longest_diameter.items() }
                 
                 rois = masks.keys()
                 
                 mrs, rtds = self.__mask_and_crop__(rois, mr, rtd, masks)
                 
                 labels = self.__get_labels__(rois, subject_id, course)
-                clinic_data = self.__get_clinic_data__(rois, subject_id, course)
+                clinic_data = self.__get_clinic_data__(rois, subject_id, course, longest_diameters)
                 
                 self.__append_data__(subject_id, mrs, rtds, clinic_data, labels)
                     
@@ -99,13 +101,13 @@ class RawData_Reader():
         
         self.__save__(raw=True)
         
-        self.__generate_split__()
+        self.__preprocess_clinic_data__()
         self.__discretize_categorical_features__()
         
-        self.__encode_discrete__()
+        self.__generate_split__()
         self.__normalize_splits__()
+        self.__one_hot__()
         self.__augment_train_set__()
-        
         self.__save__(raw=False)
         
         print('\nData has been read successfully!\n')
@@ -185,6 +187,17 @@ class RawData_Reader():
         
         return image
 
+    def __longest_diameter__(self, mask):
+        indices = np.argwhere(mask > 0)
+        
+        if len(indices) < 2:
+            return 0
+        
+        distances = pdist(indices, metric='euclidean')
+        max_diameter = np.max(distances)
+        
+        return max_diameter
+
     def __get_rts__(self, path_RTS, series_path, subject_id, course):
         rt_struct_path = [os.path.join(path_RTS, f) for f in os.listdir(path_RTS) if f.endswith('.dcm')][0]
         rtstruct = RTStructBuilder.create_from(dicom_series_path=series_path, rt_struct_path=rt_struct_path)
@@ -200,7 +213,7 @@ class RawData_Reader():
                 mask_3d = mask_3d * 1
                 mask_3d = np.swapaxes(mask_3d, 0, 2)
                 mask_3d = np.swapaxes(mask_3d, 1, 2)
-                masks[roi] = mask_3d
+                masks[roi] = (mask_3d, self.__longest_diameter__(mask_3d))
             else:
                 print('Skull!')
                 
@@ -215,7 +228,7 @@ class RawData_Reader():
             
         return to_return
 
-    def __get_clinic_data__(self, rois, subject_id, course):
+    def __get_clinic_data__(self, rois, subject_id, course, longest_diameters):
         to_return = []
         
         for roi in rois:
@@ -224,6 +237,8 @@ class RawData_Reader():
             clinic_data_row[1] = clinic_data_row[1]
             clinic_data_row[3] = clinic_data_row[3]
             clinic_data_row[4] = clinic_data_row[4]
+            clinic_data_row = np.append(clinic_data_row, longest_diameters[roi])
+            clinic_data_row = np.append(clinic_data_row, self.clinic_data.groupby(['subject_id', 'course']).size().get((subject_id, course), 0))
             to_return.append(clinic_data_row)
             
         return to_return

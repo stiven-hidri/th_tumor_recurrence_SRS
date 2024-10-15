@@ -1,29 +1,29 @@
 dataset:
   name: name
 model:
-  name: conv_rnn
-  epochs: 30
-  batch_size: 8
+  name: mlp_cd
+  epochs: 50
+  batch_size: 32
   optimizer: adam
   scheduler: plateau
-  #patience: 1
-  learning_rate: 1e-5
-  weight_decay: 1e-4
-  rnn_type: gru  #rnn, lstm, gru, gru2
-  hidden_size: 128
-  dropout: .1
+  rnn_type: None
+  hidden_size: 0
+  learning_rate: 1e-7
+  weight_decay: 1e-3
+  dropout: .2
   only_test: False
 
   lf: bce          #wbce, bce, fl
   alpha_fl: .7
-  gamma_fl: 3
-  pos_weight: 6
+  gamma_fl: 2
+  pos_weight: .8
   augmentation_techniques: ['shear', 'flip', 'gaussian_noise', 'brightness']
   p_augmentation: .8
   p_augmentation_per_technique: .3
+
 logger:
   log_dir: ./log
-  experiment_name: train_conv_rnn
+  experiment_name: train_mlp_cd
   version: 1
 checkpoint:
   monitor: val_loss
