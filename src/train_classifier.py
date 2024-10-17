@@ -37,6 +37,7 @@ if __name__ == '__main__':
             weight_decay = config.model.weight_decay,
             rnn_type=config.model.rnn_type,
             hidden_size =  config.model.hidden_size,
+            num_layers =  config.model.num_layers,
             alpha_fl = config.model.alpha_fl,
             gamma_fl = config.model.gamma_fl,
             lf = config.model.lf, 
@@ -59,6 +60,7 @@ if __name__ == '__main__':
             lr=config.model.learning_rate,
             rnn_type=config.model.rnn_type,
             hidden_size=config.model.hidden_size,
+            num_layers =  config.model.num_layers,
             weight_decay = config.model.weight_decay,
             alpha_fl = config.model.alpha_fl,
             gamma_fl = config.model.gamma_fl,
@@ -84,7 +86,7 @@ if __name__ == '__main__':
         mode=config.checkpoint.mode,
     )
 
-    # early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=5, verbose=False, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=5, verbose=False, mode="min")
 
     # Instantiate a trainer
     trainer = Trainer(
@@ -94,7 +96,7 @@ if __name__ == '__main__':
         default_root_dir=config.logger.log_dir,
         max_epochs=config.model.epochs,
         check_val_every_n_epoch=1,
-        callbacks=[checkpoint_cb],
+        callbacks=[checkpoint_cb, early_stop_callback],
         log_every_n_steps=1,
         num_sanity_val_steps=0, # Validation steps at the very beginning to check bugs without waiting for training
         reload_dataloaders_every_n_epochs=1,  # Reload the dataset to shuffle the order

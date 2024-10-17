@@ -66,6 +66,7 @@ if __name__ == '__main__':
             weight_decay=config.model.weight_decay,
             rnn_type=config.model.rnn_type,
             hidden_size= config.model.hidden_size,
+            num_layers= config.model.num_layers,
             alpha_fl=config.model.alpha_fl,
             gamma_fl=config.model.gamma_fl,
             lf=config.model.lf,
@@ -156,7 +157,7 @@ if __name__ == '__main__':
     # Convert the results list to a pandas DataFrame
     df_results = pd.DataFrame(results_list)
 
-    df_results.to_csv(os.path.join(os.path.dirname(__file__), '..', 'results_csv', f"bce_na_bm_augmentation_results.csv"), index=False)
+    df_results.to_csv(os.path.join(os.path.dirname(__file__), 'results_csv', f"bce_na_bm_augmentation_results.csv"), index=False)
 
     best_results = df_results.sort_values(by=['f1_Precision', 'j_Precision', 'roc_Precision'], ascending=False)
     print("Top performing configurations:\n", best_results.head())

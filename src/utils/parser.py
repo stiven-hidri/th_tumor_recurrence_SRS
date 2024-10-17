@@ -19,6 +19,7 @@ class Parser:
         self.parser.add_argument('--weight_decay', type=float, help='Weight decay', dest='WEIGHT_DECAY')
         self.parser.add_argument('--rnn_type', type=str, help='Weight decay', dest='RNN_TYPE')
         self.parser.add_argument('--hidden_size', type=int, help='Hidden size', dest='HIDDEN_SIZE')
+        self.parser.add_argument('--num_layers', type=int, help='Number of RNN laters', dest='NUM_LAYERS')
         self.parser.add_argument('--alpha_fl', type=float, help='Alpha focal loss', dest='ALPHA_FL')
         self.parser.add_argument('--gamma_fl', type=float, help='Gamma focal loss', dest='GAMMA_FL')
         self.parser.add_argument('--lf', type=float, help='Loss function acronym', dest='LF')
@@ -70,6 +71,9 @@ class Parser:
             
         if self.args.HIDDEN_SIZE is not None:
             config.model.hidden_size = self.args.HIDDEN_SIZE
+            
+        if self.args.NUM_LAYERS is not None:
+            config.model.num_layers = self.args.NUM_LAYERS
             
         if self.args.ALPHA_FL is not None:
             config.model.alpha_fl= self.args.ALPHA_FL

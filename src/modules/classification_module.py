@@ -7,13 +7,13 @@ import numpy as np
 from lightning.pytorch import LightningModule
 from models.base_model import BaseModel
 from models.conv_rnn import ConvRNN
-from models.conv_long_lstm import ConvLongRNN
+from models.conv_long_lstm import ConvLongLSTM
 from models.mlp_cd import MlpCD
 from utils.loss_functions import BCELoss, WeightedBCELoss, FocalLoss
 from sklearn.metrics import roc_auc_score
 
 class ClassificationModule(LightningModule):
-    def __init__(self, name: str, epochs: int, lr: float, optimizer: str, scheduler: str, weight_decay: float, lf:str, pos_weight:float, dropout: float, alpha_fl:float, gamma_fl:float, rnn_type: str, hidden_size: int, experiment_name: str, version: int, augmentation_techniques: list, p_augmentation: float, p_augmentation_per_technique: float):
+    def __init__(self, name: str, epochs: int, lr: float, optimizer: str, scheduler: str, weight_decay: float, lf:str, pos_weight:float, dropout: float, alpha_fl:float, gamma_fl:float, rnn_type: str, hidden_size: int, num_layers: int, experiment_name: str, version: int, augmentation_techniques: list, p_augmentation: float, p_augmentation_per_technique: float):
         super().__init__()
         self.save_hyperparameters()
         self.name = name
@@ -23,9 +23,9 @@ class ClassificationModule(LightningModule):
         if 'base_model' in name:
             self.model = BaseModel(dropout=dropout)
         elif 'conv_rnn' in name:
-            self.model = ConvRNN(dropout=dropout, rnn_type=rnn_type, hidden_size=hidden_size)
-        elif 'conv_long_rnn' in name:
-            self.model = ConvLongRNN(dropout=dropout, hidden_size=hidden_size)
+            self.model = ConvRNN(dropout=dropout, rnn_type=rnn_type, hidden_size=hidden_size, num_layers=num_layers)
+        elif 'conv_long_lstm' in name:
+            self.model = ConvLongLSTM(dropout=dropout, hidden_size=hidden_size, num_layers=num_layers)
         elif 'mlp_cd':
             self.model = MlpCD(dropout=dropout)
         else:
@@ -38,7 +38,8 @@ class ClassificationModule(LightningModule):
         self.scheduler = scheduler
         self.weight_decay = weight_decay
         self.rnn_type = rnn_type
-        hidden_size = hidden_size
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
         self.alpha_fl = alpha_fl
         self.gamma_fl = gamma_fl
         self.dropout = dropout
@@ -252,7 +253,7 @@ class ClassificationModule(LightningModule):
         
         if self.scheduler == 'cosine':
             print("Using CosineAnnealingLR scheduler")
-            scheduler = [torch.optim.lr_scheduler.CosineAnnealingLR(optimizers, T_max=self.epochs, eta_min=1e-8)]
+            scheduler = [torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizers, T_0=self.epochs//10, T_mult=2, eta_min=self.lr*1e-2)]
         
         elif self.scheduler == 'step':
             print("Using StepLR scheduler")

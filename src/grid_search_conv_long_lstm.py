@@ -16,9 +16,11 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 param_grid = {
     'learning_rate': [1e-4, 1e-5],
-    'batch_size': [16, 32, 64],
-    'dropout': [0.3, 0.5, 0.7],
-    'weight_decay': [1e-5, 1e-4, 1e-3],
+    'batch_size': [2, 4],
+    'dropout': [.1, .3, .5],
+    'weight_decay': [1e-4, 1e-3],
+    'num_layers': [1, 2],
+    'hidden_size': [64, 128, 256]
 }
 
 if __name__ == '__main__':
@@ -29,7 +31,7 @@ if __name__ == '__main__':
     cnt = 0
     version = int(config.logger.version)
     
-    all_param_combinations = list(product(param_grid['learning_rate'], param_grid['batch_size'], param_grid['dropout'], param_grid['weight_decay']))
+    all_param_combinations = list(product(param_grid['learning_rate'], param_grid['batch_size'], param_grid['dropout'], param_grid['weight_decay'], param_grid['num_layers'], param_grid['hidden_size']))
 
     max_cnt = len(list(all_param_combinations))
     # Iterate over all combinations of hyperparameters
@@ -38,8 +40,8 @@ if __name__ == '__main__':
     classifier_dataset = ClassifierDataset()
     train_split, val_split, test_split = classifier_dataset.create_splits()
     
-    for i, (lr, batch_size, dropout, weight_decay) in enumerate(all_param_combinations):
-        print(f"{i+1}/{max_cnt}:\tTraining with lr={lr}, batch_size={batch_size}, dropout={dropout}, weight_decay={weight_decay}")
+    for i, (lr, batch_size, dropout, weight_decay, num_layers, hidden_size) in enumerate(all_param_combinations):
+        print(f"\n*********\n{i+1}/{max_cnt}\nlr = {lr}\nbatch_size = {batch_size}\ndropout = {dropout}\nweight_decay = {weight_decay}\nnum_layers = {num_layers}\nhidden_size = {hidden_size}\n*********\n")
             
         train_dataloader = DataLoader(train_split, batch_size=batch_size, shuffle=True, num_workers=4, persistent_workers=True)
         val_dataloader = DataLoader(val_split, batch_size=batch_size, num_workers=4, persistent_workers=True)
@@ -50,25 +52,25 @@ if __name__ == '__main__':
 
         # Create the model with the current hyperparameters
         module = ClassificationModule(
-            name=config.model.name,
-            epochs=config.model.epochs,
-            lr=lr,
-            weight_decay=weight_decay,
-            rnn_type=config.model.rnn_type,
-            hidden_size= config.model.hidden_size,
-            hidden_size= config.model.hidden_size,
-            alpha_fl=config.model.alpha_fl,
-            gamma_fl=config.model.gamma_fl,
-            lf=config.model.lf,
-            dropout=dropout,
-            pos_weight=config.model.pos_weight,
-            optimizer=config.model.optimizer,
-            scheduler=config.model.scheduler,
-            experiment_name=config.logger.experiment_name,
-            version=str(version),
-            augmentation_techniques = config.model.augmentation_techniques,
-            p_augmentation = config.model.p_augmentation,
-            p_augmentation_per_technique = config.model.p_augmentation_per_technique
+            name =                          config.model.name,
+            epochs =                        config.model.epochs,
+            lr =                            lr,
+            weight_decay =                  weight_decay,
+            rnn_type =                      config.model.rnn_type,
+            hidden_size =                   hidden_size,
+            num_layers =                    num_layers,
+            alpha_fl =                      config.model.alpha_fl,
+            gamma_fl =                      config.model.gamma_fl,
+            lf =                            config.model.lf,
+            dropout =                       dropout,
+            pos_weight =                    config.model.pos_weight,
+            optimizer =                     config.model.optimizer,
+            scheduler =                     config.model.scheduler,
+            experiment_name =               config.logger.experiment_name,
+            version =                       str(version),
+            augmentation_techniques =       config.model.augmentation_techniques,
+            p_augmentation =                config.model.p_augmentation,
+            p_augmentation_per_technique =  config.model.p_augmentation_per_technique
         )
 
         # Checkpoint callback
@@ -137,6 +139,8 @@ if __name__ == '__main__':
             'batch_size': batch_size,
             'dropout': dropout,
             'weight_decay': weight_decay,
+            'num_layers': num_layers,
+            'hidden_size': hidden_size,
             **results[0]  # results[0] is the dictionary returned by the test method
         }
         
@@ -148,7 +152,7 @@ if __name__ == '__main__':
     # Convert the results list to a pandas DataFrame
     df_results = pd.DataFrame(results_list)
 
-    df_results.to_csv(os.path.join(os.path.dirname(__file__), '..', 'results_csv', f"bce_con_rnn_results.csv"), index=False)
+    df_results.to_csv(os.path.join(os.path.dirname(__file__), 'results_csv', f"conv_long_lstm_1_cd_gridsearch.csv"), index=False)
 
     best_results = df_results.sort_values(by=['f1_Precision', 'j_Precision', 'roc_Precision'], ascending=False)
     print("Top performing configurations:\n", best_results.head())

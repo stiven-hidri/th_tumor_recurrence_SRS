@@ -1,4 +1,5 @@
 import pickle
+import pprint
 from fuzzywuzzy import fuzz, process
 import os
 import shutil
@@ -201,3 +202,80 @@ def print_statistics():
             data = pickle.load(f)
             labels, counts = np.unique([x for x in data['label']], return_counts=True)
             print(f'{split}: {dict(zip(labels, counts))}')
+            
+def print_statistics_subject_lesions():
+    PATH = os.path.join(os.path.dirname(__file__), '..','..', 'data', 'raw')
+    with open(os.path.join(PATH, 'global_data.pkl'), 'rb') as f:
+        global_data = pickle.load(f)
+        subjects_id_train_set = sorted([ 463, 158, 247, 408, 234, 421, 431, 346, 487, 274, 338, 105, 293, 314, 227, 330, 391, 313, 270, 127, 324, 342, 121, 103, 114, 115, 151, 244, 245, 246, 467, 455, 152, 147])
+        train_set = {}
+        for subject in subjects_id_train_set:
+            cardinality = [0, 0]
+            cardinality[0] = sum([1 for i in range(len(global_data['subject_id'])) if global_data['label'][i] == 'stable' and global_data['subject_id'][i] == subject])
+            cardinality[1] = sum([1 for i in range(len(global_data['subject_id'])) if global_data['label'][i] == 'recurrence' and global_data['subject_id'][i] == subject])
+            train_set[subject] = cardinality
+        
+        ratio = 8
+        validation_set = {}
+        total_negative, total_positive = 0, 0
+        
+        while total_positive * ratio < total_negative or total_negative == 0 or total_positive == 0:
+            subject_with_most_positive = max(train_set, key=lambda x:train_set[x][1] if train_set[x][0] > 0 else 0)
+            validation_set.update({subject_with_most_positive: train_set[subject_with_most_positive]})
+            total_negative += train_set[subject_with_most_positive][0]
+            total_positive += train_set[subject_with_most_positive][1]
+            train_set.pop(subject_with_most_positive)
+        
+        print('Train set')
+        pprint.pprint(train_set)
+        
+        print('\nValidation set')
+        pprint.pprint(validation_set)
+        
+        print(f'\ntrain set\n{sum([x[0] for x in train_set.values()])} : {sum([x[1] for x in train_set.values()])}')
+        print(f'validation set\n{sum([x[0] for x in validation_set.values()])} : {sum([x[1] for x in validation_set.values()])}')
+
+# Proposal for new split
+
+# Train set
+#  103: [6, 0], 
+#  105: [1, 0], 
+#  114: [0, 2], 
+#  115: [1, 0], 
+#  121: [1, 0], 
+#  127: [1, 0], 
+#  147: [17, 0],
+#  151: [13, 0],
+#  158: [2, 0], 
+#  227: [2, 0], 
+#  234: [3, 0], 
+#  244: [1, 0], 
+#  245: [0, 1], 
+#  246: [5, 0], 
+#  247: [2, 0],
+#  293: [4, 0],
+#  313: [3, 0],
+#  314: [4, 0],
+#  324: [2, 0],
+#  330: [1, 0],
+#  342: [5, 1],
+#  346: [1, 0],
+#  391: [0, 2],
+#  408: [8, 1],
+#  421: [1, 0],
+#  431: [3, 0],
+#  455: [1, 1],
+#  463: [3, 1],
+#  467: [15, 0],
+#  487: [2, 0]
+
+# Validation set
+# 152: [22, 1], 270: [7, 1], 274: [1, 1], 338: [2, 1]
+
+# train set
+# 108 : 9
+# validation set
+# 32 : 4
+
+# Test set
+# 81 : 10

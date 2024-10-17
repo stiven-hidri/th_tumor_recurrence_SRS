@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class BaseModel(nn.Module):
-    def __init__(self, dropout=.3):
+    def __init__(self, dropout=.3, out_dim_clincal_features=10):
         super(BaseModel, self).__init__()
         
         # Lesion input branch
@@ -43,12 +43,10 @@ class BaseModel(nn.Module):
         self.dose_fc2 = nn.Linear(512, 128)
         
         # Clinical input branch
-        self.clinical_fc1 = nn.Linear(48, 10)  # Placeholder for dynamic input layer
-        # self.clinical_fc2 = nn.Linear(64, 32)  # Placeholder for dynamic input layer
+        self.clinical_fc1 = nn.Linear(48, out_dim_clincal_features)  # Placeholder for dynamic input layer
         
         # Final output layer
-        self.final_fc = nn.Linear(128 * 2 + 10, 1)
-        # self.final_fc = nn.Linear(128 * 2, 1)
+        self.final_fc = nn.Linear(128 * 2 + out_dim_clincal_features, 1)
         
         # Xavier initialization
         for module in self.modules():
@@ -64,60 +62,39 @@ class BaseModel(nn.Module):
         clinical_input = clinical_input.squeeze()
         
         # Lesion branch
-        x = F.relu(self.les_conv1(les_input))
-        x = self.les_pool1(x)
-        x = self.les_bn1(x)
+        x = self.les_bn1(self.les_pool1(F.relu(self.les_conv1(les_input))))        
+        x = self.les_bn2(self.les_pool2(F.relu(self.les_conv2(x))))
+        x = self.les_bn3(self.les_pool3(F.relu(self.les_conv3(x))))
         
-        x = F.relu(self.les_conv2(x))
-        x = self.les_pool2(x)
-        x = self.les_bn2(x)
+        x = self.les_global_pool(x).view(x.size(0), -1)
         
-        x = F.relu(self.les_conv3(x))
-        x = self.les_pool3(x)
-        x = self.les_bn3(x)
-        
-        x = self.les_global_pool(x)
-        x = x.view(x.size(0), -1)
-        x = F.relu(self.les_fc1(x))
-        x = self.les_dropout(x)
+        x = self.les_dropout(F.relu(self.les_fc1(x)))
         les_output = F.relu(self.les_fc2(x))
         
         # Dose branch
-        x = F.relu(self.dose_conv1(dose_input))
-        x = self.dose_pool1(x)
-        x = self.dose_bn1(x)
+        x = self.dose_bn1(self.dose_pool1(F.relu(self.dose_conv1(dose_input))))
+        x = self.dose_bn2(self.dose_pool2(F.relu(self.dose_conv2(x))))
+        x = self.dose_bn3(self.dose_pool3(F.relu(self.dose_conv3(x))))
         
-        x = F.relu(self.dose_conv2(x))
-        x = self.dose_pool2(x)
-        x = self.dose_bn2(x)
+        x = self.dose_global_pool(x).view(x.size(0), -1)
+        x = self.dose_dropout(F.relu(self.dose_fc1(x)))
         
-        x = F.relu(self.dose_conv3(x))
-        x = self.dose_pool3(x)
-        x = self.dose_bn3(x)
-        
-        x = self.dose_global_pool(x)
-        x = x.view(x.size(0), -1)
-        x = F.relu(self.dose_fc1(x))
-        x = self.dose_dropout(x)
         dose_output = F.relu(self.dose_fc2(x))
         
-        if self.clinical_fc1.in_features != clinical_input.size(1):
-            # Create the linear layer dynamically based on the input size
-            num_features = clinical_input.size(1)  # Get number of features dynamically
-            self.clinical_fc1 = nn.Linear(num_features, 10)  # Initialize layer with dynamic input size
-            
-        
         # Clinical branch
-        # clinical_output = F.relu(self.clinical_fc2(self.clinical_fc1(clinical_input)))
-        clinical_output = F.relu(self.clinical_fc1(clinical_input))
-        # clinical_output = F.relu(self.clinical_fc2(x))
         
-        # If clinical_output ends up being [128] instead of [8, 128], add the batch dimension
+        # Create the linear layer dynamically based on the input size id the input size differs from the one chosen (may happen when changing preprocessing)
+        if self.clinical_fc1.in_features != clinical_input.size(1):
+            num_features = clinical_input.size(1)
+            self.clinical_fc1 = nn.Linear(num_features, 10)
+            
+        clinical_output = F.relu(self.clinical_fc1(clinical_input))
+        
         if clinical_output.dim() == 1:
-            clinical_output = clinical_output.unsqueeze(0)  # Add batch dimension
+            clinical_output = clinical_output.unsqueeze(0)
 
         # Concatenate outputs
-        # combined = torch.cat((les_output, dose_output), dim=1)
+        
         combined = torch.cat((les_output, dose_output, clinical_output), dim=1)
         
         output = self.final_fc(combined)

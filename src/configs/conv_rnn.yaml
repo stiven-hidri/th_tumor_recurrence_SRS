@@ -1,16 +1,17 @@
 dataset:
   name: name
 model:
-  name: conv_rnn
-  epochs: 30
-  batch_size: 8
+  name: conv_rnn_cd
+  epochs: 100
+  batch_size: 2
   optimizer: adam
-  scheduler: plateau
+  scheduler: cosine
   #patience: 1
-  learning_rate: 1e-5
-  weight_decay: 1e-4
+  learning_rate: 1e-4
+  weight_decay: 1e-3
   rnn_type: gru  #rnn, lstm, gru, gru2
-  hidden_size: 128
+  hidden_size: 256
+  num_layers: 1
   dropout: .1
   only_test: False
 
@@ -20,7 +21,7 @@ model:
   pos_weight: 6
   augmentation_techniques: ['shear', 'flip', 'gaussian_noise', 'brightness']
   p_augmentation: .8
-  p_augmentation_per_technique: .3
+  p_augmentation_per_technique: .5
 logger:
   log_dir: ./log
   experiment_name: train_conv_rnn

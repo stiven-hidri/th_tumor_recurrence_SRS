@@ -14,6 +14,7 @@ class ModelConfig(BaseModel):
     weight_decay: float
     rnn_type: str
     hidden_size: int
+    num_layers: int
     alpha_fl:float
     gamma_fl: float
     lf:str
