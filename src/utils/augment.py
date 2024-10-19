@@ -78,7 +78,7 @@ def flip(mr, rtd):
         
     return mr, rtd
 
-def combine_aug(mr, rtd, p_augmentation=.3, p_augmentation_per_techinque=.8, augmentations_techinques=['shear', 'flip', 'gaussian_noise', 'brightness']):
+def combine_aug(mr, rtd, p_augmentation=.3, p_augmentation_per_techinque=.8, augmentations_techinques=['shear', 'gaussian_noise', 'brightness']):
     augmentations = {
         'shear': shear, 
         'flip': flip, 

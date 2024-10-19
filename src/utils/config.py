@@ -16,6 +16,7 @@ class ModelConfig(BaseModel):
     hidden_size: int
     num_layers: int
     alpha_fl:float
+    use_clinical_data:bool
     gamma_fl: float
     lf:str
     pos_weight:float

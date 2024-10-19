@@ -59,6 +59,7 @@ if __name__ == '__main__':
             rnn_type =                      config.model.rnn_type,
             hidden_size =                   hidden_size,
             num_layers =                    num_layers,
+            use_clinical_data =                 config.model.use_clinical_data,
             alpha_fl =                      config.model.alpha_fl,
             gamma_fl =                      config.model.gamma_fl,
             lf =                            config.model.lf,

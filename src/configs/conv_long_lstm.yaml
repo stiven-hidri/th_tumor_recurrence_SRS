@@ -1,18 +1,20 @@
 dataset:
   name: name
 model:
-  name: conv_long_lstm_cd
-  epochs: 100
-  batch_size: 4
+  name: conv_long_lstm
+  epochs: 2
+  batch_size: 2
   optimizer: adam
-  scheduler: cosine
+  scheduler: plateau
   rnn_type: none
-  hidden_size: 64
+  hidden_size: 32
   num_layers: 1
-  learning_rate: 1e-4
+  learning_rate: 5e-5
   weight_decay: 1e-4
   dropout: .3
   only_test: False
+
+  use_clinical_data: True
   
   lf: bce          #wbce, bce, fl
   #focal loss hyperparameters
@@ -21,7 +23,7 @@ model:
   #wbce hyperparameters
   pos_weight: .8
   #augmentation hyperparameters
-  augmentation_techniques: ['shear', 'flip', 'gaussian_noise', 'brightness']
+  augmentation_techniques: ['shear',  'gaussian_noise', 'brightness']
   p_augmentation: .8
   p_augmentation_per_technique: .4
 logger:

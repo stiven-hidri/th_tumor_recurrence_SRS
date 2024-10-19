@@ -1,10 +1,14 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from models.mlp_cd import MlpCD
 
 class BaseModel(nn.Module):
-    def __init__(self, dropout=.3, out_dim_clincal_features=10):
+    def __init__(self, dropout=.3, out_dim_clincal_features=10, use_clinical_data=True):
         super(BaseModel, self).__init__()
+        
+        self.use_clinical_data = use_clinical_data
+        self.out_dim_clincal_features = out_dim_clincal_features
         
         # Lesion input branch
         self.les_conv1 = nn.Conv3d(1, 32, kernel_size=3, padding=1)
@@ -42,11 +46,11 @@ class BaseModel(nn.Module):
         self.dose_dropout = nn.Dropout(dropout)
         self.dose_fc2 = nn.Linear(512, 128)
         
-        # Clinical input branch
-        self.clinical_fc1 = nn.Linear(48, out_dim_clincal_features)  # Placeholder for dynamic input layer
-        
         # Final output layer
-        self.final_fc = nn.Linear(128 * 2 + out_dim_clincal_features, 1)
+        if use_clinical_data:
+            self.final_fc = nn.Linear(128 * 2 + out_dim_clincal_features, 1)
+        else:
+            self.final_fc = nn.Linear(128 * 2, 1)
         
         # Xavier initialization
         for module in self.modules():
@@ -54,12 +58,21 @@ class BaseModel(nn.Module):
                 torch.nn.init.xavier_uniform_(module.weight)
                 if module.bias is not None:
                     module.bias.data.zero_()
+                    
+        if self.use_clinical_data:
+            self.cd_backbone = MlpCD()
+            checkpoint = torch.load('models\save_models\mlp_cd.ckpt')
+            checkpoint['state_dict'] = {key.replace('model.', ''): value for key, value in checkpoint['state_dict'].items()}
+            self.cd_backbone.load_state_dict(checkpoint['state_dict'])
+            self.cd_backbone.final_fc = nn.Identity()
         
-    def forward(self, les_input, dose_input, clinical_input):
+    def forward(self, les_input, dose_input, clinical_input=None):
         
         les_input = les_input.unsqueeze(1)
         dose_input = dose_input.unsqueeze(1)
-        clinical_input = clinical_input.squeeze()
+        
+        if self.use_clinical_data:
+            clinical_input = clinical_input.squeeze()
         
         # Lesion branch
         x = self.les_bn1(self.les_pool1(F.relu(self.les_conv1(les_input))))        
@@ -82,20 +95,17 @@ class BaseModel(nn.Module):
         dose_output = F.relu(self.dose_fc2(x))
         
         # Clinical branch
-        
-        # Create the linear layer dynamically based on the input size id the input size differs from the one chosen (may happen when changing preprocessing)
-        if self.clinical_fc1.in_features != clinical_input.size(1):
-            num_features = clinical_input.size(1)
-            self.clinical_fc1 = nn.Linear(num_features, 10)
+        if self.use_clinical_data:
             
-        clinical_output = F.relu(self.clinical_fc1(clinical_input))
-        
-        if clinical_output.dim() == 1:
-            clinical_output = clinical_output.unsqueeze(0)
+            clinical_output = self.cd_backbone(clinical_input)
 
-        # Concatenate outputs
-        
-        combined = torch.cat((les_output, dose_output, clinical_output), dim=1)
+            if clinical_output.dim() == 1:
+                clinical_output = clinical_output.unsqueeze(0)
+
+            combined = torch.cat((les_output, dose_output, clinical_output), dim=1)
+            
+        else:
+            combined = torch.cat((les_output, dose_output), dim=1)
         
         output = self.final_fc(combined)
         

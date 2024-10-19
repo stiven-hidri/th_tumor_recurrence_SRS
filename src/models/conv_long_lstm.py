@@ -4,64 +4,50 @@ import torchvision.models as models
 import timm
 from torchvision.models import shufflenet_v2_x1_5
 from models.rnn import LSTMModel
+from models.mlp_cd import MlpCD
 
 class BackboneCNN(nn.Module):
-    def __init__(self, inception_v2_is_chosen=False, out_features=256):
+    def __init__(self):
         super(BackboneCNN, self).__init__()
         
-        self.inception_v2_is_chosen = inception_v2_is_chosen
+        self.backbone = models.resnet34(pretrained=True)
+        self.backbone.conv1 = nn.Conv2d(in_channels=2,  
+                                        out_channels=self.backbone.conv1.out_channels,
+                                        kernel_size=self.backbone.conv1.kernel_size,
+                                        stride=self.backbone.conv1.stride, 
+                                        padding=self.backbone.conv1.padding,
+                                        bias=self.backbone.conv1.bias)
         
-        if self.inception_v2_is_chosen:
-        
-            self.backbone = timm.create_model('inception_resnet_v2', pretrained=False, num_classes=0)
+        with torch.no_grad():
+            original_weights = self.backbone.conv1.weight
+            self.backbone.conv1.weight[:, :2, :, :] = original_weights[:, :2, :, :]
             
-            self.backbone.conv2d_1a.conv = nn.Conv2d(
-                in_channels=2,  # Change from 3 to 2 channels
-                out_channels=self.backbone.conv2d_1a.conv.out_channels,
-                kernel_size=(3, 3),
-                stride=(1, 1),
-                padding=(1, 1),
-                bias=self.backbone.conv2d_1a.conv.bias
-            )
-            
-            self.fc = nn.Linear(self.backbone.conv2d_7b.conv.out_channels, out_features)
-        else:
-            self.backbone = shufflenet_v2_x1_5()
-            
-            # Adapt model to 2 channels 2d images
-            self.backbone.conv1[0] = nn.Conv2d(2, 24, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
-            
-            # Adapt model to extract out_features features
-            self.fc = nn.Linear(self.backbone.fc.in_features, out_features)
-            self.backbone.fc = nn.Identity()
+        self.backbone.fc = nn.Identity()
 
     def forward(self, x):
         return self.fc(self.backbone(x))
 
 # LSTM Model
 class ConvLongLSTM(nn.Module):
-    def __init__(self, dropout:.3, hidden_size=64, num_layers = 2, output_dim=1, out_features=256, input_clinical_data = 48, output_clinical_data = 10, inception_v2_is_chosen=False):
+    def __init__(self, dropout:.3, hidden_size=64, num_layers = 2, output_dim=1, clinical_data_output_dim = 10, use_clinical_data=True):
         super(ConvLongLSTM, self).__init__()
+        self.use_clinical_data=use_clinical_data
+        self.backbone = BackboneCNN()
         
-        self.backbone = BackboneCNN(out_features=out_features, inception_v2_is_chosen=inception_v2_is_chosen)
-        self.lstm = nn.LSTM(input_size=out_features+output_clinical_data, hidden_size=hidden_size, num_layers=num_layers, batch_first=True, dropout=dropout)
+        self.input_dim_rnn = 512 + clinical_data_output_dim if self.use_clinical_data else 512
+            
+        self.lstm = LSTMModel(self.input_dim_rnn, hidden_dim=hidden_size, layer_dim=num_layers, output_dim=hidden_size, dropout_prob=dropout)
         
-        self.fc_clinical_data = nn.Linear(input_clinical_data, output_clinical_data)
+        self.hidden_size = hidden_size
+        
+        if self.use_clinical_data:
+            self.cd_backbone = MlpCD()
+            checkpoint = torch.load('models\save_models\mlp_cd.ckpt')
+            checkpoint['state_dict'] = {key.replace('model.', ''): value for key, value in checkpoint['state_dict'].items()}
+            self.cd_backbone.load_state_dict(checkpoint['state_dict'])
+            self.cd_backbone.final_fc = nn.Identity()
 
-        self.fc = nn.Linear(hidden_size, output_dim)  # Binary classification (recurrence or stability)
-        
-    def init_weights(self):
-        # Initialize weights for all layers
-        for name, param in self.lstm.named_parameters():
-            if 'weight_ih' in name:  # input-hidden weights
-                nn.init.xavier_uniform_(param.data)  # Xavier initialization
-            elif 'weight_hh' in name:  # hidden-hidden weights
-                nn.init.orthogonal_(param.data)  # Orthogonal initialization
-            elif 'bias' in name:
-                param.data.fill_(0)  # Initialize biases to zero
-                # Special initialization for the forget gate bias
-                n = param.size(0)
-                param.data[n//4:n//2].fill_(1)  # Set forget gate bias to 1
+        self.fc = nn.Linear(hidden_size, output_dim)
 
     def forward(self, mr, rtd, clinical_data):
         
@@ -71,9 +57,12 @@ class ConvLongLSTM(nn.Module):
         combined = torch.stack([mr, rtd], dim=2).view(-1, channels, height, width)
 
         features = self.backbone(combined).view(batch_size, depth, -1)
-        features_clinical_data = torch.relu(self.fc_clinical_data(clinical_data)).unsqueeze(1).repeat(1, depth, 1)
         
-        final_features = torch.cat((features, features_clinical_data), dim=-1)
+        if self.use_clinical_data:
+            features_clinical_data = torch.relu(self.cd_backbone(clinical_data)).unsqueeze(1).repeat(1, depth, 1)
+            final_features = torch.cat((features, features_clinical_data), dim=-1)
+        else:
+            final_features = features
 
         lstm_out, _ = self.lstm(final_features)
 

@@ -31,8 +31,10 @@ class RawData_Reader():
         self.clinic_data_ll = pd.read_excel(self.CLINIC_DATA_FILE_PATH, sheet_name='lesion_level')
         self.clinic_data_cl = pd.read_excel(self.CLINIC_DATA_FILE_PATH, sheet_name='course_level')
         
+        # 0 = mets_diagnosis, 1 = primary_diagnosis, 2 = age, 3 = gender, 4 = roi, 5 = fractions, 6 = longest_diameter, 7 = number_of_lesions
         self.CLINIC_FEATURES_TO_DISCRETIZE = [0, 1, 3, 4]
         self.CLINIC_FEATURES_TO_NORMALIZE = [2, 5, 6, 7]
+        self.CLINIC_FEATURES_TO_KEEP = [1, 4, 6, 7]
         
         self.split_info = None
         
@@ -301,6 +303,10 @@ class RawData_Reader():
                 mr, rtd = self.train_set['mr'][i], self.train_set['rtd'][i]
                 augmented_mr = self.__rotate_image__(mr)
                 augmented_rtd = self.__rotate_image__(rtd)
+                
+                # flip
+                augmented_mr.extend([torch.flip(mr, dims=[0]), torch.flip(mr, dims=[1])])
+                augmented_rtd.extend([torch.flip(rtd, dims=[0]), torch.flip(rtd, dims=[1])])
 
                 augmented_label = [self.train_set['label'][i]] * len(augmented_mr)
                 augmented_clinic_data = [self.train_set['clinic_data'][i]] * len(augmented_mr)
@@ -327,19 +333,6 @@ class RawData_Reader():
     
     
     def __preprocess_clinic_data__(self):
-         #['mets_diagnosis', 'primary_diagnosis', 'age', 'gender', 'roi', 'fractions']
-         
-        # words_roi = set()
-        # words_prim = set()
-         
-        for i, value in enumerate(self.global_data['clinic_data']):
-            self.global_data['clinic_data'][i][0] = process_mets(self.global_data['clinic_data'][i][0])
-            self.global_data['clinic_data'][i][1] = process_prim(self.global_data['clinic_data'][i][1])
-            self.global_data['clinic_data'][i][3] = self.global_data['clinic_data'][i][3].lower().strip()
-            self.global_data['clinic_data'][i][4] = process_roi(self.global_data['clinic_data'][i][4])
-            
-        
-            
         for i, value in enumerate(self.global_data['clinic_data']):
             self.global_data['clinic_data'][i][0] = process_mets(self.global_data['clinic_data'][i][0])
             self.global_data['clinic_data'][i][1] = process_prim(self.global_data['clinic_data'][i][1])
@@ -369,11 +362,13 @@ class RawData_Reader():
         
         for split in self.ALL_SPLITS:
             for i_tensor in range(len(split['clinic_data'])):
-                new_tensor = [split['clinic_data'][i_tensor][j] for j in self.CLINIC_FEATURES_TO_NORMALIZE]                
+                new_tensor = [split['clinic_data'][i_tensor][j] for j in self.CLINIC_FEATURES_TO_NORMALIZE if j in self.CLINIC_FEATURES_TO_KEEP]                
                 for j in self.CLINIC_FEATURES_TO_DISCRETIZE:
-                    new_tensor.append(F.one_hot(split['clinic_data'][i_tensor][j].long(), num_classes=max_values[j]+1).float()[0])
+                    if j in self.CLINIC_FEATURES_TO_KEEP:
+                        new_tensor.append(F.one_hot(split['clinic_data'][i_tensor][j].long(), num_classes=max_values[j]+1).float()[0])
                 split['clinic_data'][i_tensor] = torch.cat(new_tensor)
                 
+        print(f"\n\nLength of clinical features: {len(self.train_set['clinic_data'][-1])}\n\n")
     
     def __compute_statistics__(self, data):
         statistics = {}
@@ -486,8 +481,13 @@ class RawData_Reader():
             
     def __split_subjects__(self):
         subjects_test   =   [ 427, 243, 257, 224, 420, 312, 316, 199, 219, 492, 332, 364, 132 ]
-        subjects_train  =   [ 463, 158, 247, 408, 234, 421, 431, 346, 487, 274, 338, 105, 293, 314, 227, 330, 391, 313, 270, 127, 324, 342, 121, 103, 114, 115, 151, 244, 245, 246, 467 ]
-        subjects_val    =   [ 455, 152, 147]
+        # old
+        # subjects_train  =   [ 463, 158, 247, 408, 234, 421, 431, 346, 487, 274, 338, 105, 293, 314, 227, 330, 391, 313, 270, 127, 324, 342, 121, 103, 114, 115, 151, 244, 245, 246, 467 ]
+        # subjects_val    =   [ 455, 152, 147]
+        
+        # new
+        subjects_train =      [ 103, 105, 114, 115, 121, 127, 147, 151, 158, 227, 234, 244, 245, 246, 247, 293, 313, 314, 324, 330, 342, 346, 391, 408, 421, 431, 455, 463, 467, 487 ]
+        subjects_val =        [ 152, 270, 274, 338 ]
         
         self.split_info = {
             'train': subjects_train, 

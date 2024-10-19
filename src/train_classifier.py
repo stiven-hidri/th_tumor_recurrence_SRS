@@ -38,6 +38,7 @@ if __name__ == '__main__':
             rnn_type=config.model.rnn_type,
             hidden_size =  config.model.hidden_size,
             num_layers =  config.model.num_layers,
+            use_clinical_data=config.model.use_clinical_data,
             alpha_fl = config.model.alpha_fl,
             gamma_fl = config.model.gamma_fl,
             lf = config.model.lf, 
@@ -62,6 +63,7 @@ if __name__ == '__main__':
             hidden_size=config.model.hidden_size,
             num_layers =  config.model.num_layers,
             weight_decay = config.model.weight_decay,
+            use_clinical_data=config.model.use_clinical_data,
             alpha_fl = config.model.alpha_fl,
             gamma_fl = config.model.gamma_fl,
             lf = config.model.lf,
@@ -86,7 +88,7 @@ if __name__ == '__main__':
         mode=config.checkpoint.mode,
     )
 
-    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=5, verbose=False, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=10, verbose=False, mode="min")
 
     # Instantiate a trainer
     trainer = Trainer(

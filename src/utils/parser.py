@@ -20,15 +20,16 @@ class Parser:
         self.parser.add_argument('--rnn_type', type=str, help='Weight decay', dest='RNN_TYPE')
         self.parser.add_argument('--hidden_size', type=int, help='Hidden size', dest='HIDDEN_SIZE')
         self.parser.add_argument('--num_layers', type=int, help='Number of RNN laters', dest='NUM_LAYERS')
+        self.parser.add_argument('--use_clinical_data', type=bool, help='Use clinical data', dest='USE_CLINICAL_DATA')
         self.parser.add_argument('--alpha_fl', type=float, help='Alpha focal loss', dest='ALPHA_FL')
         self.parser.add_argument('--gamma_fl', type=float, help='Gamma focal loss', dest='GAMMA_FL')
-        self.parser.add_argument('--lf', type=float, help='Loss function acronym', dest='LF')
+        self.parser.add_argument('--lf', type=str, help='Loss function acronym', dest='LF')
         self.parser.add_argument('--dropout', type=float, help='Dropout', dest='DROPOUT')
         self.parser.add_argument('--pos_weight', type=float, help='Positive weight WBCE', dest='POS_WEIGHT')
         self.parser.add_argument('--epochs', type=int, help='Number of epochs', dest='EPOCHS')
         self.parser.add_argument('--pretrained', type=str, help='Path to pretrained model checkpoint', dest='PRETRAINED')
         self.parser.add_argument('--only_test', help='Set True to skip training', action='store_true', dest='ONLY_TEST')
-        self.parser.add_argument('--augmentation_techniques', type=list, help='Augmentation techinques to apply', dest='augmentation_techniques')
+        self.parser.add_argument('--augmentation_techniques', type=list, help='Augmentation techinques to apply', dest='AUGMENTATION_TECHNIQUES')
         self.parser.add_argument('--p_augmentation', type=float, help='Probability to augment', dest='P_AUGMENTATION')
         self.parser.add_argument('--p_augmentation_per_technique', type=float, help='Probability to apply each technique', dest='P_AUGMENTATION_PER_TECHNIQUE')
 
@@ -74,6 +75,9 @@ class Parser:
             
         if self.args.NUM_LAYERS is not None:
             config.model.num_layers = self.args.NUM_LAYERS
+        
+        if self.args.USE_CLINICAL_DATA is not None:
+            config.model.use_clinical_data = self.args.USE_CLINICAL_DATA
             
         if self.args.ALPHA_FL is not None:
             config.model.alpha_fl= self.args.ALPHA_FL
@@ -105,7 +109,7 @@ class Parser:
         if self.args.VERSION_NUMBER is not None:
             config.logger.version = self.args.VERSION_NUMBER
             
-        if self.args.augmentation_techniques is not None:
+        if self.args.AUGMENTATION_TECHNIQUES is not None:
             config.logger.augmentation_techniques = self.args.augmentation_techniques
             
         if self.args.P_AUGMENTATION is not None:

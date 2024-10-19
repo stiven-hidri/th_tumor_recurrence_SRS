@@ -1,25 +1,24 @@
 dataset:
   name: name
 model:
-  name: conv_rnn_cd
-  epochs: 100
+  name: conv_rnn
+  epochs: 2
   batch_size: 2
   optimizer: adam
-  scheduler: cosine
-  #patience: 1
+  scheduler: plateau
   learning_rate: 1e-4
   weight_decay: 1e-3
-  rnn_type: gru  #rnn, lstm, gru, gru2
-  hidden_size: 256
+  rnn_type: rnn  #rnn, lstm, gru, gru2
+  hidden_size: 64
   num_layers: 1
   dropout: .1
   only_test: False
-
-  lf: bce          #wbce, bce, fl
-  alpha_fl: .7
+  use_clinical_data: True
+  lf: fl          #wbce, bce, fl
+  alpha_fl: .6
   gamma_fl: 3
   pos_weight: 6
-  augmentation_techniques: ['shear', 'flip', 'gaussian_noise', 'brightness']
+  augmentation_techniques: ['shear',  'gaussian_noise', 'brightness']
   p_augmentation: .8
   p_augmentation_per_technique: .5
 logger:

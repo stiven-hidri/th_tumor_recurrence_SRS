@@ -5,23 +5,22 @@ model:
   epochs: 50
   batch_size: 32
   optimizer: adam
-  scheduler: plateau
+  scheduler: cosine
   rnn_type: None
   hidden_size: 0
   num_layers: 1
-  learning_rate: 1e-7
+  learning_rate: 1e-2
   weight_decay: 1e-3
-  dropout: .2
+  dropout: 0.1
   only_test: False
-
-  lf: bce          #wbce, bce, fl
-  alpha_fl: .7
-  gamma_fl: 2
+  use_clinical_data: True
+  lf: fl          #wbce, bce, fl
+  alpha_fl: .6
+  gamma_fl: 3
   pos_weight: .8
-  augmentation_techniques: ['shear', 'flip', 'gaussian_noise', 'brightness']
+  augmentation_techniques: ['shear',  'gaussian_noise', 'brightness']
   p_augmentation: .8
   p_augmentation_per_technique: .3
-
 logger:
   log_dir: ./log
   experiment_name: train_mlp_cd

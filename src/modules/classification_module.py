@@ -13,7 +13,7 @@ from utils.loss_functions import BCELoss, WeightedBCELoss, FocalLoss
 from sklearn.metrics import roc_auc_score
 
 class ClassificationModule(LightningModule):
-    def __init__(self, name: str, epochs: int, lr: float, optimizer: str, scheduler: str, weight_decay: float, lf:str, pos_weight:float, dropout: float, alpha_fl:float, gamma_fl:float, rnn_type: str, hidden_size: int, num_layers: int, experiment_name: str, version: int, augmentation_techniques: list, p_augmentation: float, p_augmentation_per_technique: float):
+    def __init__(self, name: str, epochs: int, lr: float, optimizer: str, scheduler: str, weight_decay: float, lf:str, pos_weight:float, dropout: float, use_clinical_data:bool, alpha_fl:float, gamma_fl:float, rnn_type: str, hidden_size: int, num_layers: int, experiment_name: str, version: int, augmentation_techniques: list, p_augmentation: float, p_augmentation_per_technique: float):
         super().__init__()
         self.save_hyperparameters()
         self.name = name
@@ -21,11 +21,11 @@ class ClassificationModule(LightningModule):
         # Config    
         # Network
         if 'base_model' in name:
-            self.model = BaseModel(dropout=dropout)
+            self.model = BaseModel(dropout=dropout, use_clinical_data=use_clinical_data)
         elif 'conv_rnn' in name:
-            self.model = ConvRNN(dropout=dropout, rnn_type=rnn_type, hidden_size=hidden_size, num_layers=num_layers)
+            self.model = ConvRNN(dropout=dropout, rnn_type=rnn_type, hidden_size=hidden_size, num_layers=num_layers, use_clinical_data=use_clinical_data)
         elif 'conv_long_lstm' in name:
-            self.model = ConvLongLSTM(dropout=dropout, hidden_size=hidden_size, num_layers=num_layers)
+            self.model = ConvLongLSTM(dropout=dropout, hidden_size=hidden_size, num_layers=num_layers, use_clinical_data=use_clinical_data)
         elif 'mlp_cd':
             self.model = MlpCD(dropout=dropout)
         else:
@@ -40,6 +40,7 @@ class ClassificationModule(LightningModule):
         self.rnn_type = rnn_type
         self.hidden_size = hidden_size
         self.num_layers = num_layers
+        self.use_clinical_data = use_clinical_data
         self.alpha_fl = alpha_fl
         self.gamma_fl = gamma_fl
         self.dropout = dropout
@@ -64,7 +65,7 @@ class ClassificationModule(LightningModule):
     def forward(self, mr, rtd, clinic_data):
         if 'mlp_cd' in self.name:
             y = self.model(clinic_data)
-        elif 'cd' in self.name:
+        elif self.use_clinical_data:
             y = self.model(mr, rtd, clinic_data)
         else:
             y = self.model(mr, rtd)
@@ -265,7 +266,7 @@ class ClassificationModule(LightningModule):
         
         elif self.scheduler == 'plateau':
             print("Using ReduceLROnPlateau scheduler")
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizers, mode='min', factor=0.1, patience=5, min_lr=1e-12)
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizers, mode='min', factor=0.1, patience=3, min_lr=1e-12)
             return  {
                         'optimizer': optimizers,
                         'lr_scheduler': scheduler,
