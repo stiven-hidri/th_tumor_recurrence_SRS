@@ -2,24 +2,24 @@ dataset:
   name: name
 model:
   name: base_model
-  epochs: 2
+  epochs: 100
   batch_size: 32
   optimizer: adam
-  scheduler: plateau
+  scheduler: cosine
   rnn_type: None
   hidden_size: 0
   num_layers: 0
-  learning_rate: 1e-5
-  weight_decay: 1e-4
+  learning_rate: 5e-5
+  weight_decay: 1e-3
   dropout: .5
   only_test: False
   lf: fl          #wbce, bce, fl
   use_clinical_data: True
-  alpha_fl: .6
+  alpha_fl: .92
   gamma_fl: 3
   pos_weight: .8
-  augmentation_techniques: ['shear',  'gaussian_noise', 'brightness']
-  p_augmentation: .8
+  augmentation_techniques: ['shear', 'flip', 'rotate']
+  p_augmentation: .3
   p_augmentation_per_technique: .3
 logger:
   log_dir: ./log

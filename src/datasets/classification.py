@@ -6,9 +6,11 @@ from sklearn.preprocessing import MinMaxScaler
 
 
 class ClassifierDatasetSplit(Dataset):
-    def __init__(self, data: dict, split_name: str):
+    def __init__(self, data: dict, split_name: str, p_augmentation=.0, augmentation_techniques=[]):
         self.data = data
         self.split_name = split_name
+        self.p_augmentation = p_augmentation
+        self.augmentation_techniques = augmentation_techniques
         self.DATA_PATH = os.path.join(os.path.dirname(__file__), '..','..', 'data', 'processed')
         with open(os.path.join(self.DATA_PATH, f'statistics.pkl'), 'rb') as f:
             self.statistics = pickle.load(f)
@@ -22,16 +24,15 @@ class ClassifierDatasetSplit(Dataset):
         clinic_data = self.data['clinic_data'][idx]
         label = self.data['label'][idx]
         
-        if int(label) == 1 and self.split_name == 'train':
-            mr, rtd = combine_aug(mr, rtd)
-            mr_min = mr.min()
+        if self.split_name == 'train':
+            mr, rtd = combine_aug(mr, rtd, p_augmentation=self.p_augmentation, augmentations_techinques=self.augmentation_techniques)
+            # mr_min = mr.min()            
+            # mr_max = mr.max()
+            # rtd_min = rtd.min()
+            # rtd_max = rtd.max()
             
-            mr_max = mr.max()
-            rtd_min = rtd.min()
-            rtd_max = rtd.max()
-            
-            mr = (mr - mr_min) / (mr_max - mr_min)
-            rtd = (rtd - rtd_min) / (rtd_max - rtd_min)
+            # mr = (mr - mr_min) / (mr_max - mr_min)
+            # rtd = (rtd - rtd_min) / (rtd_max - rtd_min)
         
         return mr, rtd, clinic_data, label
 
@@ -40,8 +41,10 @@ class ClassifierDatasetSplit(Dataset):
             yield self.__getitem__(i)
 
 class ClassifierDataset(Dataset):
-    def __init__(self):
+    def __init__(self, p_augmentation=.3, augmentation_techniques=['shear', 'gaussian_noise', 'flip', 'rotate', 'brightness']):
         super().__init__()
+        self.p_augmentation = p_augmentation
+        self.augmentation_techniques = augmentation_techniques
         self.DATA_PATH = os.path.join(os.path.dirname(__file__), '..','..', 'data', 'processed')
         self.train, self.test, self.val = self.__load__()
 
@@ -61,4 +64,4 @@ class ClassifierDataset(Dataset):
         return train, test, val
     
     def create_splits(self):
-        return ClassifierDatasetSplit(self.train, 'train'), ClassifierDatasetSplit(self.test, 'test'), ClassifierDatasetSplit(self.val, 'val')
+        return ClassifierDatasetSplit(self.train, 'train', p_augmentation=self.p_augmentation, augmentation_techniques=self.augmentation_techniques), ClassifierDatasetSplit(self.test, 'test'), ClassifierDatasetSplit(self.val, 'val')

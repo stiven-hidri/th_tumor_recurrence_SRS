@@ -15,7 +15,7 @@ if __name__ == '__main__':
     config, device = parser.parse_args()
 
     # Load sources
-    classifier_dataset = ClassifierDataset()
+    classifier_dataset = ClassifierDataset(p_augmentation=config.model.p_augmentation, augmentation_techniques=config.model.augmentation_techniques)
 
     # Create train-val-test splits
     train_split, val_split, test_split = classifier_dataset.create_splits()
@@ -26,7 +26,8 @@ if __name__ == '__main__':
     test_dataloader = DataLoader(test_split, batch_size=config.model.batch_size, num_workers=4, persistent_workers=True)
 
     # Instantiate logger, logs goes into {config.logger.log_dir}/{config.logger.experiment_name}/version_{config.logger.version}
-    logger = TensorBoardLogger(save_dir=config.logger.log_dir, version=config.logger.version, name=config.logger.experiment_name)
+    logger = TensorBoardLogger(save_dir=config.logger.log_dir, version=config.logger.version, name=config.logger.experiment_name )
+
 
     # Load pretrained model or else start from scratch
     if config.model.pretrained is None:
@@ -88,7 +89,7 @@ if __name__ == '__main__':
         mode=config.checkpoint.mode,
     )
 
-    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=10, verbose=False, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=5, verbose=True, mode="min")
 
     # Instantiate a trainer
     trainer = Trainer(
@@ -103,7 +104,7 @@ if __name__ == '__main__':
         num_sanity_val_steps=0, # Validation steps at the very beginning to check bugs without waiting for training
         reload_dataloaders_every_n_epochs=1,  # Reload the dataset to shuffle the order
     )
-
+    
     # Train
     if not config.model.only_test:
         trainer.fit(model=module, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)

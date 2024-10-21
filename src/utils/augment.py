@@ -70,28 +70,39 @@ def shear(mr, rtd):
     return mr, rtd
 
 def flip(mr, rtd):
-    if np.random.random_sample() > .5:
-        mr, rtd = mr.fliplr(), rtd.fliplr()
-        
-    if np.random.random_sample() > .5:
-        mr, rtd = mr.flipud(), rtd.flipud()
+    axis = random.choice([0, 1, 2])
+    
+    mr = torch.flip(mr, dims=[axis])
+    rtd = torch.flip(rtd, dims=[axis])
         
     return mr, rtd
 
-def combine_aug(mr, rtd, p_augmentation=.3, p_augmentation_per_techinque=.8, augmentations_techinques=['shear', 'gaussian_noise', 'brightness']):
+def rotate(mr, rtd):
+    axis = random.choice([(1,2), (0,2), (0,1)]) # x, y, z 
+    k = np.random.choice([1, 2, 3])
+    
+    mr = torch.rot90(mr, k=k, dims=axis)
+    rtd = torch.rot90(rtd, k=k, dims=axis)
+        
+    return mr, rtd
+
+def combine_aug(mr, rtd, p_augmentation=.3, augmentations_techinques=['shear', 'gaussian_noise', 'flip', 'rotate' 'brightness']):
+    
     augmentations = {
         'shear': shear, 
         'flip': flip, 
         'gaussian_noise':gaussian_noise, 
-        'brightness':brightness
+        'brightness':brightness,
+        'rotate':rotate,
     }
-    
-    augmentations = [augmentations[a] for a in augmentations_techinques if a in list(augmentations.keys())]
-    probabilities = [p_augmentation_per_techinque] * len(augmentations)
-    
+        
     if random.random() <= p_augmentation:
-        for aug, prob in zip(augmentations, probabilities):
-            if random.random() < prob:
-                mr, rtd = aug(mr, rtd)
+        augmentations = [augmentations[a] for a in augmentations_techinques if a in list(augmentations.keys())]
+        n_augmentations_to_be_performed = random.randint(1, len(augmentations))
+        
+        augmentations_to_be_performed = random.sample(augmentations, n_augmentations_to_be_performed)
+        
+        for aug in augmentations_to_be_performed:
+            mr, rtd = aug(mr, rtd)
 
     return mr, rtd

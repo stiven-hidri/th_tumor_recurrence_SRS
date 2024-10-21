@@ -1,1 +1,23 @@
-TO BE DONE
+fuzzywuzzy==0.18.0
+lightning==2.3.3
+matplotlib==3.7.2
+matplotlib==3.8.0
+numpy==1.24.3
+pandas==2.2.3
+pydantic==1.10.12
+pydicom==3.0.1
+PyYAML==6.0.1
+PyYAML==6.0.2
+rt_utils==1.2.7
+scikit_learn==1.2.2
+scipy==1.11.4
+scipy==1.10.1
+SimpleITK==2.4.0
+timm==1.0.11
+torch==2.2.0
+torch==2.2.2
+torch==2.3.0
+torch==2.3.1
+torch==2.1.0
+torchvision==0.15.2a0
+torchvision==0.16.0

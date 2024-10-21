@@ -55,7 +55,7 @@ class RawData_Reader():
         self.__generate_split__()
         self.__normalize_splits__()
         self.__one_hot__()
-        self.__augment_train_set__()
+        #self.__augment_train_set__()
         self.__save__(raw=False)
         print('Done!', end='\r')
         

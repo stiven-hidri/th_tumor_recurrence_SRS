@@ -18,7 +18,7 @@ model:
   
   lf: bce          #wbce, bce, fl
   #focal loss hyperparameters
-  alpha_fl: .7
+  alpha_fl: .5
   gamma_fl: 2
   #wbce hyperparameters
   pos_weight: .8

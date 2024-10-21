@@ -74,6 +74,9 @@ class ClassificationModule(LightningModule):
 
     def loss_function(self, prediction, label):
         return self.lf.forward(prediction, label)
+    
+    def on_train_start(self):
+        print(self.hparams)
 
     def training_step(self, batch):
         mr, rd, clinic_data, label = batch
@@ -254,7 +257,7 @@ class ClassificationModule(LightningModule):
         
         if self.scheduler == 'cosine':
             print("Using CosineAnnealingLR scheduler")
-            scheduler = [torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizers, T_0=self.epochs//10, T_mult=2, eta_min=self.lr*1e-2)]
+            scheduler = [torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizers, T_0=self.epochs//20, T_mult=1, eta_min=self.lr*1e-2)]
         
         elif self.scheduler == 'step':
             print("Using StepLR scheduler")

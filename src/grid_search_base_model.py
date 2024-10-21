@@ -15,10 +15,12 @@ import os
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 param_grid = {
-    'learning_rate': [1e-4, 5e-5, 1e-5],
-    'batch_size': [8, 16, 32, 64],
-    'dropout': [0.3, 0.5, 0.7],
-    'weight_decay': [1e-5, 1e-4, 1e-3],
+    'learning_rate': [1e-5, 5e-5, 1e-4],
+    'batch_size': [8, 16, 32],
+    'dropout': [0.1, 0.3, 0.5],
+    'weight_decay': [1e-3, 1e-4],
+    'gamma_fl': [2, 3],
+    'use_clinical_data': [True, False]
 }
 
 if __name__ == '__main__':
@@ -29,7 +31,7 @@ if __name__ == '__main__':
     cnt = 0
     version = int(config.logger.version)
     
-    all_param_combinations = list(product(param_grid['learning_rate'], param_grid['batch_size'], param_grid['dropout'], param_grid['weight_decay']))
+    all_param_combinations = list(product(param_grid['learning_rate'], param_grid['batch_size'], param_grid['dropout'], param_grid['weight_decay'], param_grid['gamma_fl'], param_grid['use_clinical_data']))
     start = len(all_param_combinations)-99
     end = 99
     print(start)
@@ -42,8 +44,8 @@ if __name__ == '__main__':
     classifier_dataset = ClassifierDataset()
     train_split, val_split, test_split = classifier_dataset.create_splits()
     
-    for i, (lr, batch_size, dropout, weight_decay) in enumerate(all_param_combinations):
-        print(f"{i+1}\{max_cnt}:\tTraining with lr={lr}, batch_size={batch_size}, dropout={dropout}, weight_decay={weight_decay}")
+    for i, (lr, batch_size, dropout, weight_decay, gamma_fl, use_clinical_data) in enumerate(all_param_combinations):
+        print(f"\n*********\n{i+1}/{max_cnt}\nTraining with lr={lr}\nbatch_size={batch_size}\ndropout={dropout}\nweight_decay={weight_decay}\ngamma_fl={gamma_fl}\nuse_clinical_data={use_clinical_data}\n*********\n")
             
         train_dataloader = DataLoader(train_split, batch_size=batch_size, shuffle=True, num_workers=4, persistent_workers=True)
         val_dataloader = DataLoader(val_split, batch_size=batch_size, num_workers=4, persistent_workers=True)
@@ -61,9 +63,9 @@ if __name__ == '__main__':
             rnn_type=config.model.rnn_type,
             hidden_size= config.model.hidden_size,
             num_layers=config.model.num_layers,
-            use_clinical_data=config.model.use_clinical_data,
+            use_clinical_data=use_clinical_data,
             alpha_fl=config.model.alpha_fl,
-            gamma_fl=config.model.gamma_fl,
+            gamma_fl=gamma_fl,
             lf=config.model.lf,
             dropout=dropout,
             pos_weight=config.model.pos_weight,
@@ -86,7 +88,7 @@ if __name__ == '__main__':
             mode=config.checkpoint.mode
         )
         
-        early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=2, verbose=False, mode="min")
+        early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=4, verbose=False, mode="min")
 
         #Trainer
         trainer = Trainer(
@@ -103,10 +105,8 @@ if __name__ == '__main__':
         )
 
         # Train
-        # if not config.model.only_test:
-            # trainer.fit(model=module, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
-
-        # Test
+        if not config.model.only_test:
+            trainer.fit(model=module, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
         if checkpoint_cb.best_model_path:
             module = ClassificationModule.load_from_checkpoint(name=config.model.name, checkpoint_path=checkpoint_cb.best_model_path)
@@ -142,6 +142,8 @@ if __name__ == '__main__':
             'batch_size': batch_size,
             'dropout': dropout,
             'weight_decay': weight_decay,
+            'gamma_fl': gamma_fl,
+            'use_clinical_data': use_clinical_data,
             **results[0]  # results[0] is the dictionary returned by the test method
         }
         
@@ -153,7 +155,7 @@ if __name__ == '__main__':
     # Convert the results list to a pandas DataFrame
     df_results = pd.DataFrame(results_list)
 
-    df_results.to_csv(os.path.join(os.path.dirname(__file__), 'results_csv', f"bce_na_bm_results.csv"), index=False)
+    df_results.to_csv(os.path.join(os.path.dirname(__file__), 'results_csv', f"fl_base_model_gridsearch.csv"), index=False)
 
     best_results = df_results.sort_values(by=['f1_Precision', 'j_Precision', 'roc_Precision'], ascending=False)
     print("Top performing configurations:\n", best_results.head())
