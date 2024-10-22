@@ -15,10 +15,15 @@ import os
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 param_grid = {
-    'learning_rate': [1e-4, 1e-5],
-    'batch_size': [16, 32, 64],
-    'dropout': [0.3, 0.5, 0.7],
-    'weight_decay': [1e-5, 1e-4, 1e-3],
+    'learning_rate': [1e-5],
+    'batch_size': [1,2,4, 8],
+    'dropout': [0.1],
+    'weight_decay': [1e-3],
+    'gamma_fl': [2, 3],
+    'rnn_type': ['rnn'],
+    'hidden_size': [32, 64, 128, 256],
+    'num_layers': [1],
+    'use_clinical_data': [ True]   
 }
 
 if __name__ == '__main__':
@@ -26,10 +31,9 @@ if __name__ == '__main__':
     results_list = []
     parser = Parser()
     config, device = parser.parse_args()
-    cnt = 0
-    version = int(config.logger.version)
+    version = 0
     
-    all_param_combinations = list(product(param_grid['learning_rate'], param_grid['batch_size'], param_grid['dropout'], param_grid['weight_decay']))
+    all_param_combinations = list(product(param_grid['learning_rate'], param_grid['batch_size'], param_grid['dropout'], param_grid['weight_decay'], param_grid['gamma_fl'], param_grid['rnn_type'], param_grid['hidden_size'], param_grid['num_layers'], param_grid['use_clinical_data']))
 
     max_cnt = len(list(all_param_combinations))
     # Iterate over all combinations of hyperparameters
@@ -38,8 +42,8 @@ if __name__ == '__main__':
     classifier_dataset = ClassifierDataset()
     train_split, val_split, test_split = classifier_dataset.create_splits()
     
-    for i, (lr, batch_size, dropout, weight_decay) in enumerate(all_param_combinations):
-        print(f"{i+1}/{max_cnt}:\tTraining with lr={lr}, batch_size={batch_size}, dropout={dropout}, weight_decay={weight_decay}")
+    for i, (lr, batch_size, dropout, weight_decay, gamma_fl, rnn_type, hidden_size, num_layers, use_clinical_data) in enumerate(all_param_combinations):
+        print(f"\n*********\n{i+1}/{max_cnt}\n*********\n")
             
         train_dataloader = DataLoader(train_split, batch_size=batch_size, shuffle=True, num_workers=4, persistent_workers=True)
         val_dataloader = DataLoader(val_split, batch_size=batch_size, num_workers=4, persistent_workers=True)
@@ -54,12 +58,12 @@ if __name__ == '__main__':
             epochs=config.model.epochs,
             lr=lr,
             weight_decay=weight_decay,
-            rnn_type=config.model.rnn_type,
-            hidden_size= config.model.hidden_size,
-            num_layers= config.model.num_layers,
-            use_clinical_data=config.model.use_clinical_data,
+            rnn_type=rnn_type,
+            hidden_size= hidden_size,
+            num_layers= num_layers,
+            use_clinical_data=use_clinical_data,
             alpha_fl=config.model.alpha_fl,
-            gamma_fl=config.model.gamma_fl,
+            gamma_fl=gamma_fl,
             lf=config.model.lf,
             dropout=dropout,
             pos_weight=config.model.pos_weight,
@@ -82,7 +86,7 @@ if __name__ == '__main__':
             mode=config.checkpoint.mode
         )
         
-        early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=2, verbose=False, mode="min")
+        early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=5, verbose=False, mode="min")
 
         #Trainer
         trainer = Trainer(
@@ -134,10 +138,15 @@ if __name__ == '__main__':
         results = trainer.test(model=module, dataloaders=test_dataloader, verbose=False)
         
         result_dict = {
+            'version': version,
             'learning_rate': lr,
             'batch_size': batch_size,
             'dropout': dropout,
             'weight_decay': weight_decay,
+            'rnn_type': rnn_type,
+            'hidden_size': hidden_size,
+            'num_layers': num_layers,
+            'use_clinical_data': use_clinical_data,
             **results[0]  # results[0] is the dictionary returned by the test method
         }
         
@@ -149,7 +158,6 @@ if __name__ == '__main__':
     # Convert the results list to a pandas DataFrame
     df_results = pd.DataFrame(results_list)
 
-    df_results.to_csv(os.path.join(os.path.dirname(__file__), 'results_csv', f"bce_con_rnn_results.csv"), index=False)
-
-    best_results = df_results.sort_values(by=['f1_Precision', 'j_Precision', 'roc_Precision'], ascending=False)
-    print("Top performing configurations:\n", best_results.head())
+    df_results.to_csv(os.path.join(os.path.dirname(__file__), 'results_csv', f"gridsearch_fl_convrnn_3.csv"), index=False)
+    
+    print("\nDone!\n")

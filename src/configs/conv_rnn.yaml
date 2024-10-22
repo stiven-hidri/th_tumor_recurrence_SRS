@@ -2,7 +2,7 @@ dataset:
   name: name
 model:
   name: conv_rnn
-  epochs: 2
+  epochs: 150
   batch_size: 2
   optimizer: adam
   scheduler: plateau
@@ -15,11 +15,11 @@ model:
   only_test: False
   use_clinical_data: True
   lf: fl          #wbce, bce, fl
-  alpha_fl: .9
+  alpha_fl: .92
   gamma_fl: 2
   pos_weight: 6
   augmentation_techniques: ['shear',  'gaussian_noise', 'brightness']
-  p_augmentation: .8
+  p_augmentation: .3
   p_augmentation_per_technique: .5
 logger:
   log_dir: ./log

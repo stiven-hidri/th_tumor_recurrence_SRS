@@ -30,7 +30,7 @@ if __name__ == '__main__':
     cnt = 0
     version = int(config.logger.version)
     
-    all_param_combinations = list(product(param_grid['learning_rate'], param_grid['batch_size'], param_grid['dropout'], param_grid['weight_decay'], param_grid['alpha_fl'], param_grid['gamma_fl']))
+    all_param_combinations = list(product(param_grid['learning_rate'], param_grid['batch_size'], param_grid['dropout'], param_grid['weight_decay'], param_grid['gamma_fl']))
 
     max_cnt = len(list(all_param_combinations))
     # Iterate over all combinations of hyperparameters
@@ -40,7 +40,7 @@ if __name__ == '__main__':
     train_split, val_split, test_split = classifier_dataset.create_splits()
     
     for i, (lr, batch_size, dropout, weight_decay, gamma_fl) in enumerate(all_param_combinations):
-        print(f"**********\n{i+1}\{max_cnt}:\tTraining with lr={lr}, batch_size={batch_size}, dropout={dropout}, weight_decay={weight_decay}, gamma_fl={gamma_fl}\n**********")
+        print(f"**********\n{i+1}\{max_cnt}:\n**********")
             
         train_dataloader = DataLoader(train_split, batch_size=batch_size, shuffle=True, num_workers=4, persistent_workers=True)
         val_dataloader = DataLoader(val_split, batch_size=batch_size, num_workers=4, persistent_workers=True)
@@ -142,8 +142,6 @@ if __name__ == '__main__':
             'gamma_fl': gamma_fl,
             **results[0]  # results[0] is the dictionary returned by the test method
         }
-        
-        pprint.pprint(result_dict)
         
         results_list.append(result_dict)
         version += 1
