@@ -15,11 +15,10 @@ import os
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 param_grid = {
-    'learning_rate': [1e-2, 1e-3],
-    'batch_size': [16, 32, 64],
-    'dropout': [.0, 0.1],
-    'weight_decay': [1e-4, 1e-2],
-    'alpha_fl': [.6, .7, .8, .9],
+    'learning_rate': [1e-2, 1e-3, 1e-4],
+    'batch_size': [8, 16, 32, 64],
+    'dropout': [.0, 0.1, .3],
+    'weight_decay': [1e-4, 1e-3, 1e-2],
     'gamma_fl': [2, 3]
 }
 
@@ -40,8 +39,8 @@ if __name__ == '__main__':
     classifier_dataset = ClassifierDataset()
     train_split, val_split, test_split = classifier_dataset.create_splits()
     
-    for i, (lr, batch_size, dropout, weight_decay, alpha_fl, gamma_fl) in enumerate(all_param_combinations):
-        print(f"**********\n{i+1}\{max_cnt}:\tTraining with lr={lr}, batch_size={batch_size}, dropout={dropout}, weight_decay={weight_decay}, alpha_fl={alpha_fl}, gamma_fl={gamma_fl}\n**********")
+    for i, (lr, batch_size, dropout, weight_decay, gamma_fl) in enumerate(all_param_combinations):
+        print(f"**********\n{i+1}\{max_cnt}:\tTraining with lr={lr}, batch_size={batch_size}, dropout={dropout}, weight_decay={weight_decay}, gamma_fl={gamma_fl}\n**********")
             
         train_dataloader = DataLoader(train_split, batch_size=batch_size, shuffle=True, num_workers=4, persistent_workers=True)
         val_dataloader = DataLoader(val_split, batch_size=batch_size, num_workers=4, persistent_workers=True)
@@ -60,7 +59,7 @@ if __name__ == '__main__':
             hidden_size =                   config.model.hidden_size,
             num_layers =                    config.model.num_layers,
             use_clinical_data =             config.model.use_clinical_data,
-            alpha_fl =                      alpha_fl,
+            alpha_fl =                      config.model.alpha_fl,
             gamma_fl =                      gamma_fl,
             lf =                            config.model.lf,
             dropout =                       dropout,
@@ -140,7 +139,6 @@ if __name__ == '__main__':
             'batch_size': batch_size,
             'dropout': dropout,
             'weight_decay': weight_decay,
-            'alpha_fl': alpha_fl,
             'gamma_fl': gamma_fl,
             **results[0]  # results[0] is the dictionary returned by the test method
         }
@@ -153,7 +151,7 @@ if __name__ == '__main__':
     # Convert the results list to a pandas DataFrame
     df_results = pd.DataFrame(results_list)
 
-    df_results.to_csv(os.path.join(os.path.dirname(__file__), 'results_csv', f"grid_search_fl_mlcp_cd_01.csv"), index=False)
+    df_results.to_csv(os.path.join(os.path.dirname(__file__), 'results_csv', f"gridsearch_fl_mlcpcd.csv"), index=False)
 
     best_results = df_results.sort_values(by=['f1_Precision', 'j_Precision', 'roc_Precision'], ascending=False)
     print("Top performing configurations:\n", best_results.head())
