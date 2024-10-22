@@ -2,7 +2,7 @@ dataset:
   name: name
 model:
   name: mlp_cd
-  epochs: 50
+  epochs: 100
   batch_size: 32
   optimizer: adam
   scheduler: cosine
