@@ -5,6 +5,7 @@ import timm
 from torchvision.models import shufflenet_v2_x1_5
 from models.rnn import LSTMModel
 from models.mlp_cd import MlpCD
+import os
 
 class BackboneCNN(nn.Module):
     def __init__(self):
@@ -42,7 +43,8 @@ class ConvLongLSTM(nn.Module):
         
         if self.use_clinical_data:
             self.cd_backbone = MlpCD()
-            checkpoint = torch.load('models\save_models\mlp_cd.ckpt')
+            path_to_mlpcd_weights = os.path.join(os.path.dirname(__file__), 'saved_models', 'mlp_cd.ckpt')
+            checkpoint = torch.load(path_to_mlpcd_weights)
             checkpoint['state_dict'] = {key.replace('model.', ''): value for key, value in checkpoint['state_dict'].items()}
             self.cd_backbone.load_state_dict(checkpoint['state_dict'])
             self.cd_backbone.final_fc = nn.Identity()

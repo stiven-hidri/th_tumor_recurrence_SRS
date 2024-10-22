@@ -5,6 +5,7 @@ from .rnn import RNNModel, LSTMModel, GRUModel
 from torchvision.models import resnet34      
 from models.shufflenetv2 import ShuffleNetV2     
 from models.mlp_cd import MlpCD 
+import os            
             
 class ConvRNN(nn.Module):
     def __init__(self, rnn_type='rnn', hidden_size=128, num_layers = 1, dropout = .1, use_clinical_data=True, out_dim_backbone=512):
@@ -21,7 +22,8 @@ class ConvRNN(nn.Module):
         
         if self.use_clinical_data:
             self.cd_backbone = MlpCD()
-            checkpoint = torch.load('models\save_models\mlp_cd.ckpt')
+            path_to_mlpcd_weights = os.path.join(os.path.dirname(__file__), 'saved_models', 'mlp_cd.ckpt')
+            checkpoint = torch.load(path_to_mlpcd_weights)
             checkpoint['state_dict'] = {key.replace('model.', ''): value for key, value in checkpoint['state_dict'].items()}
             self.cd_backbone.load_state_dict(checkpoint['state_dict'])
             self.cd_backbone.final_fc = nn.Identity()

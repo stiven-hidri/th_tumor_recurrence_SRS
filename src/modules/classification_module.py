@@ -140,8 +140,8 @@ class ClassificationModule(LightningModule):
 
     def choose_best_threshold(self, validation_outputs):
         
-        pred_probs = [vo[0] for vo in validation_outputs]
-        true_labels = [vo[1] for vo in validation_outputs]
+        pred_probs = [vo[0].cpu() for vo in validation_outputs]
+        true_labels = [vo[1].cpu() for vo in validation_outputs]
         
         thresholds = np.arange(0.0, 1.0, 0.05)
         best_t_f1 = 0.5
