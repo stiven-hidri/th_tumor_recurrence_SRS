@@ -15,15 +15,15 @@ import os
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 param_grid = {
-    'learning_rate': [1e-5],
-    'batch_size': [1,2,4, 8],
-    'dropout': [0.1],
+    'learning_rate': [1e-4],
+    'batch_size': [1, 2, 4],
+    'dropout': [0.3],
     'weight_decay': [1e-3],
     'gamma_fl': [2, 3],
-    'rnn_type': ['rnn'],
-    'hidden_size': [32, 64, 128, 256],
+    'rnn_type': ['gru'],
+    'hidden_size': [64, 128, 256],
     'num_layers': [1],
-    'use_clinical_data': [ True]   
+    'use_clinical_data': [False, True]   
 }
 
 if __name__ == '__main__':
@@ -86,7 +86,7 @@ if __name__ == '__main__':
             mode=config.checkpoint.mode
         )
         
-        early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=5, verbose=False, mode="min")
+        early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=8, verbose=False, mode="min")
 
         #Trainer
         trainer = Trainer(
@@ -158,6 +158,6 @@ if __name__ == '__main__':
     # Convert the results list to a pandas DataFrame
     df_results = pd.DataFrame(results_list)
 
-    df_results.to_csv(os.path.join(os.path.dirname(__file__), 'results_csv', f"gridsearch_fl_convrnn_3.csv"), index=False)
+    df_results.to_csv(os.path.join(os.path.dirname(__file__), 'results_csv', f"{config.logger.experiment_name}.csv"), index=False)
     
     print("\nDone!\n")

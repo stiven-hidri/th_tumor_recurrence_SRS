@@ -3,7 +3,6 @@ import torch.nn as nn
 from .resnet3d import generate_model as generate_model
 from .rnn import RNNModel, LSTMModel, GRUModel
 from torchvision.models import resnet34      
-from models.shufflenetv2 import ShuffleNetV2     
 from models.mlp_cd import MlpCD 
 import os            
             
@@ -49,7 +48,7 @@ class ConvRNN(nn.Module):
         feat_mr = self.backbone(mr)
         feat_rtd = self.backbone(rtd)
         
-        if clinical_data is not None:
+        if self.use_clinical_data:
             feat_mr = torch.cat((feat_mr, features_clinical_data), dim=-1)
             feat_rtd = torch.cat((feat_rtd, features_clinical_data), dim=-1)
         

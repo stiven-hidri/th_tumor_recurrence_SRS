@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 import torchvision.models as models
-import timm
-from torchvision.models import shufflenet_v2_x1_5
 from models.rnn import LSTMModel
 from models.mlp_cd import MlpCD
 import os
@@ -12,7 +10,11 @@ class BackboneCNN(nn.Module):
         super(BackboneCNN, self).__init__()
         
         self.backbone = models.resnet34(pretrained=True)
-        self.backbone.conv1 = nn.Conv2d(in_channels=2,  
+        
+        for param in self.backbone.parameters():
+            param.requires_grad = False
+        
+        self.backbone.conv1 = nn.Conv2d(in_channels=2,
                                         out_channels=self.backbone.conv1.out_channels,
                                         kernel_size=self.backbone.conv1.kernel_size,
                                         stride=self.backbone.conv1.stride, 
@@ -22,6 +24,9 @@ class BackboneCNN(nn.Module):
         with torch.no_grad():
             original_weights = self.backbone.conv1.weight
             self.backbone.conv1.weight[:, :2, :, :] = original_weights[:, :2, :, :]
+            
+        for param in self.backbone.parameters():
+            param.requires_grad = False
             
         self.backbone.fc = nn.Identity()
 
@@ -48,6 +53,9 @@ class ConvLongLSTM(nn.Module):
             checkpoint['state_dict'] = {key.replace('model.', ''): value for key, value in checkpoint['state_dict'].items()}
             self.cd_backbone.load_state_dict(checkpoint['state_dict'])
             self.cd_backbone.final_fc = nn.Identity()
+            
+            for param in self.cd_backbone.parameters():
+                param.requires_grad = False
 
         self.fc = nn.Linear(hidden_size, output_dim)
 
@@ -66,7 +74,7 @@ class ConvLongLSTM(nn.Module):
         else:
             final_features = features
 
-        lstm_out, _ = self.lstm(final_features)
+        lstm_out = self.lstm(final_features)
 
         output = self.fc(lstm_out[:, -1, :])
 

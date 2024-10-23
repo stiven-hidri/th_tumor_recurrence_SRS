@@ -267,7 +267,7 @@ class ClassificationModule(LightningModule):
         
         elif self.scheduler == 'plateau':
             print("Using ReduceLROnPlateau scheduler")
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizers, mode='min', factor=0.1, patience=3, min_lr=1e-12)
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizers, mode='min', factor=0.5, patience=5, min_lr=1e-12)
             return  {
                         'optimizer': optimizers,
                         'lr_scheduler': scheduler,

@@ -26,14 +26,8 @@ class ClassifierDatasetSplit(Dataset):
         
         if self.split_name == 'train':
             # mr, rtd = combine_aug(mr, rtd, p_augmentation=self.p_augmentation if int(label) == 0 else 1 - self.p_augmentation, augmentations_techinques=self.augmentation_techniques)
-            mr, rtd = combine_aug(mr, rtd, p_augmentation=self.p_augmentation, augmentations_techinques=self.augmentation_techniques)
-            # mr_min = mr.min()            
-            # mr_max = mr.max()
-            # rtd_min = rtd.min()
-            # rtd_max = rtd.max()
-            
-            # mr = (mr - mr_min) / (mr_max - mr_min)
-            # rtd = (rtd - rtd_min) / (rtd_max - rtd_min)
+            p = self.p_augmentation if label == 1 else .3
+            mr, rtd = combine_aug(mr, rtd, p_augmentation=p, augmentations_techinques=self.augmentation_techniques)
         
         return mr, rtd, clinic_data, label
 
