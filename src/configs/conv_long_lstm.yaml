@@ -2,10 +2,10 @@ dataset:
   name: name
 model:
   name: conv_long_lstm
-  epochs: 2
+  epochs: 150
   batch_size: 2
   optimizer: adam
-  scheduler: plateau
+  scheduler: cosine
   rnn_type: none
   hidden_size: 32
   num_layers: 1
@@ -13,18 +13,13 @@ model:
   weight_decay: 1e-4
   dropout: .3
   only_test: False
-
   use_clinical_data: True
-  
-  lf: bce          #wbce, bce, fl
-  #focal loss hyperparameters
-  alpha_fl: .5
+  lf: fl          #wbce, bce, fl
+  alpha_fl: .92
   gamma_fl: 2
-  #wbce hyperparameters
   pos_weight: .8
-  #augmentation hyperparameters
-  augmentation_techniques: ['shear',  'gaussian_noise', 'brightness']
-  p_augmentation: .8
+  augmentation_techniques: ['shear', 'flip', 'rotate']
+  p_augmentation: .3
   p_augmentation_per_technique: .4
 logger:
   log_dir: ./log

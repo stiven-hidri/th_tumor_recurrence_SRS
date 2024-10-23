@@ -65,10 +65,8 @@ class ClassificationModule(LightningModule):
     def forward(self, mr, rtd, clinic_data):
         if 'mlp_cd' in self.name:
             y = self.model(clinic_data)
-        elif self.use_clinical_data:
-            y = self.model(mr, rtd, clinic_data)
         else:
-            y = self.model(mr, rtd)
+            y = self.model(mr, rtd, clinic_data)
             
         return y
 
@@ -257,7 +255,7 @@ class ClassificationModule(LightningModule):
         
         if self.scheduler == 'cosine':
             print("Using CosineAnnealingLR scheduler")
-            scheduler = [torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizers, T_0=self.epochs//10, T_mult=1, eta_min=self.lr*1e-2)]
+            scheduler = [torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizers, T_0=10, T_mult=1, eta_min=self.lr*1e-1)]
         
         elif self.scheduler == 'step':
             print("Using StepLR scheduler")

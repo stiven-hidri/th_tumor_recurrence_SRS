@@ -26,7 +26,7 @@ class BackboneCNN(nn.Module):
         self.backbone.fc = nn.Identity()
 
     def forward(self, x):
-        return self.fc(self.backbone(x))
+        return self.backbone(x)
 
 # LSTM Model
 class ConvLongLSTM(nn.Module):
@@ -37,7 +37,7 @@ class ConvLongLSTM(nn.Module):
         
         self.input_dim_rnn = 512 + clinical_data_output_dim if self.use_clinical_data else 512
             
-        self.lstm = LSTMModel(self.input_dim_rnn, hidden_dim=hidden_size, layer_dim=num_layers, output_dim=hidden_size, dropout_prob=dropout)
+        self.lstm = LSTMModel(self.input_dim_rnn, hidden_dim=hidden_size, layer_dim=num_layers, dropout_prob=dropout)
         
         self.hidden_size = hidden_size
         
