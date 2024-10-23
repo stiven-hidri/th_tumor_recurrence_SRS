@@ -15,12 +15,12 @@ import os
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 param_grid = {
-    'learning_rate': [1e-5, 5e-5, 1e-4],
+    'learning_rate': [5e-5, 1e-4],
     'batch_size': [8, 16, 32],
     'dropout': [0.1, 0.3, 0.5],
     'weight_decay': [1e-3, 1e-4],
     'gamma_fl': [2, 3],
-    'use_clinical_data': [True, False]
+    'use_clinical_data': [False, True]
 }
 
 if __name__ == '__main__':
@@ -28,24 +28,18 @@ if __name__ == '__main__':
     results_list = []
     parser = Parser()
     config, device = parser.parse_args()
-    cnt = 0
-    version = int(config.logger.version)
+    
+    version = 0
     
     all_param_combinations = list(product(param_grid['learning_rate'], param_grid['batch_size'], param_grid['dropout'], param_grid['weight_decay'], param_grid['gamma_fl'], param_grid['use_clinical_data']))
-    start = len(all_param_combinations)-99
-    end = 99
-    print(start)
     
-    all_param_combinations = all_param_combinations[:end+1]
     max_cnt = len(list(all_param_combinations))
-    # Iterate over all combinations of hyperparameters
     
-    # Load sources and create datasets
     classifier_dataset = ClassifierDataset()
     train_split, val_split, test_split = classifier_dataset.create_splits()
     
     for i, (lr, batch_size, dropout, weight_decay, gamma_fl, use_clinical_data) in enumerate(all_param_combinations):
-        print(f"\n*********\n{i+1}/{max_cnt}\nTraining with lr={lr}\nbatch_size={batch_size}\ndropout={dropout}\nweight_decay={weight_decay}\ngamma_fl={gamma_fl}\nuse_clinical_data={use_clinical_data}\n*********\n")
+        print(f"\n*********\n{i+1}/{max_cnt}\n*********\n")
             
         train_dataloader = DataLoader(train_split, batch_size=batch_size, shuffle=True, num_workers=4, persistent_workers=True)
         val_dataloader = DataLoader(val_split, batch_size=batch_size, num_workers=4, persistent_workers=True)
@@ -138,6 +132,7 @@ if __name__ == '__main__':
         results = trainer.test(model=module, dataloaders=test_dataloader, verbose=False)
         
         result_dict = {
+            'version': version,
             'learning_rate': lr,
             'batch_size': batch_size,
             'dropout': dropout,
@@ -147,8 +142,6 @@ if __name__ == '__main__':
             **results[0]  # results[0] is the dictionary returned by the test method
         }
         
-        pprint.pprint(result_dict)
-        
         results_list.append(result_dict)
         version += 1
 
@@ -157,5 +150,4 @@ if __name__ == '__main__':
 
     df_results.to_csv(os.path.join(os.path.dirname(__file__), 'results_csv', f"gridsearch_fl_basemodel.csv"), index=False)
 
-    best_results = df_results.sort_values(by=['f1_Precision', 'j_Precision', 'roc_Precision'], ascending=False)
-    print("Top performing configurations:\n", best_results.head())
+    print("\nDone!\n")

@@ -25,6 +25,7 @@ class ClassifierDatasetSplit(Dataset):
         label = self.data['label'][idx]
         
         if self.split_name == 'train':
+            # mr, rtd = combine_aug(mr, rtd, p_augmentation=self.p_augmentation if int(label) == 0 else 1 - self.p_augmentation, augmentations_techinques=self.augmentation_techniques)
             mr, rtd = combine_aug(mr, rtd, p_augmentation=self.p_augmentation, augmentations_techinques=self.augmentation_techniques)
             # mr_min = mr.min()            
             # mr_max = mr.max()
