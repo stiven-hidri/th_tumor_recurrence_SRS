@@ -2,7 +2,7 @@ import os
 import pickle
 from torch.utils.data import Dataset
 from utils.augment import combine_aug
-from sklearn.preprocessing import MinMaxScaler
+from torchvision import transforms
 
 
 class ClassifierDatasetSplit(Dataset):
@@ -24,10 +24,15 @@ class ClassifierDatasetSplit(Dataset):
         clinic_data = self.data['clinic_data'][idx]
         label = self.data['label'][idx]
         
+        transform = transforms.Compose([
+            transforms.
+            transforms.ToTensor()
+        ])
+        
         if self.split_name == 'train':
             # mr, rtd = combine_aug(mr, rtd, p_augmentation=self.p_augmentation if int(label) == 0 else 1 - self.p_augmentation, augmentations_techinques=self.augmentation_techniques)
-            p = self.p_augmentation if label == 1 else .3
-            mr, rtd = combine_aug(mr, rtd, p_augmentation=p, augmentations_techinques=self.augmentation_techniques)
+            # p = self.p_augmentation if label == 1 else  .3
+            mr, rtd = combine_aug(mr, rtd, p_augmentation=self.p_augmentation, augmentations_techinques=self.augmentation_techniques)
         
         return mr, rtd, clinic_data, label
 

@@ -7,6 +7,7 @@ import numpy as np
 from lightning.pytorch import LightningModule
 from models.base_model import BaseModel
 from models.conv_rnn import ConvRNN
+from models.base_model_enhanced import BaseModel_Enhanced
 from models.conv_long_lstm import ConvLongLSTM
 from models.mlp_cd import MlpCD
 from utils.loss_functions import BCELoss, WeightedBCELoss, FocalLoss
@@ -20,7 +21,9 @@ class ClassificationModule(LightningModule):
         
         # Config    
         # Network
-        if 'base_model' in name:
+        if 'base_model_enhanced' in name:
+            self.model = BaseModel_Enhanced(dropout=dropout, use_clinical_data=use_clinical_data)
+        elif 'base_model' in name:
             self.model = BaseModel(dropout=dropout, use_clinical_data=use_clinical_data)
         elif 'conv_rnn' in name:
             self.model = ConvRNN(dropout=dropout, rnn_type=rnn_type, hidden_size=hidden_size, num_layers=num_layers, use_clinical_data=use_clinical_data)

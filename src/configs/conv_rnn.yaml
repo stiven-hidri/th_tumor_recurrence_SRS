@@ -11,15 +11,15 @@ model:
   rnn_type: rnn  #rnn, lstm, gru, gru2
   hidden_size: 64
   num_layers: 1
-  dropout: .1
+  dropout: .3
   only_test: False
   use_clinical_data: True
   lf: fl          #wbce, bce, fl
   alpha_fl: .92
   gamma_fl: 2
   pos_weight: 6
-  augmentation_techniques: ['shear',  'flip', 'rotation']
-  p_augmentation: .7
+  augmentation_techniques: ['random_affine']
+  p_augmentation: .3
   p_augmentation_per_technique: .5
 logger:
   log_dir: ./log

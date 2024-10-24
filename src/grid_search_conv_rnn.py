@@ -15,15 +15,15 @@ import os
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 param_grid = {
-    'learning_rate': [1e-4],
-    'batch_size': [1, 2, 4],
-    'dropout': [0.3],
-    'weight_decay': [1e-3],
-    'gamma_fl': [2, 3],
+    'learning_rate': [ .5e-3, 1e-4 ],
+    'batch_size': [ 32, 16 ],
+    'dropout': [ 0.1, .3 ],
+    'weight_decay': [ 1e-4, 1e-3 ],
+    'gamma_fl': [ 2, 3],
     'rnn_type': ['gru'],
-    'hidden_size': [64, 128, 256],
+    'hidden_size': [8, 16, 32],
     'num_layers': [1],
-    'use_clinical_data': [False, True]   
+    'use_clinical_data': [True]   
 }
 
 if __name__ == '__main__':
@@ -96,6 +96,7 @@ if __name__ == '__main__':
             default_root_dir=config.logger.log_dir,
             max_epochs=config.model.epochs,
             check_val_every_n_epoch=1,
+            gradient_clip_val=1.0,
             callbacks=[checkpoint_cb, early_stop_callback],
             log_every_n_steps=1,
             num_sanity_val_steps=0,

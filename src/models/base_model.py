@@ -67,6 +67,9 @@ class BaseModel(nn.Module):
             checkpoint['state_dict'] = {key.replace('model.', ''): value for key, value in checkpoint['state_dict'].items()}
             self.cd_backbone.load_state_dict(checkpoint['state_dict'])
             self.cd_backbone.final_fc = nn.Identity()
+            
+            for param in self.cd_backbone.parameters():
+                param.requires_grad = False
         
     def forward(self, les_input, dose_input, clinical_input=None):
         

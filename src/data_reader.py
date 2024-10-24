@@ -57,7 +57,7 @@ class RawData_Reader():
         self.__generate_split__()
         self.__normalize_splits__()
         self.__one_hot__()
-        #self.__augment_train_set__()
+        self.__augment_train_set__()
         self.__save__(raw=False)
         print('Done!', end='\r')
         
@@ -301,14 +301,14 @@ class RawData_Reader():
         i = 0
         total_len = len(self.train_set['mr'])
         while i < total_len:
-            if int(self.train_set['label'][i]) == 1:
+            if int(self.train_set['label'][i]) == 1 or int(self.train_set['label'][i]) == 0:
                 mr, rtd = self.train_set['mr'][i], self.train_set['rtd'][i]
-                augmented_mr = self.__rotate_image__(mr)
-                augmented_rtd = self.__rotate_image__(rtd)
+                # augmented_mr = self.__rotate_image__(mr)
+                # augmented_rtd = self.__rotate_image__(rtd)
                 
                 # flip
-                augmented_mr.extend([torch.flip(mr, dims=[0]), torch.flip(mr, dims=[1])])
-                augmented_rtd.extend([torch.flip(rtd, dims=[0]), torch.flip(rtd, dims=[1])])
+                augmented_mr = [torch.flip(mr, dims=[0]), torch.flip(mr, dims=[1]), torch.flip(mr, dims=[2])]
+                augmented_rtd = [torch.flip(rtd, dims=[0]), torch.flip(rtd, dims=[1]), torch.flip(rtd, dims=[2])]
 
                 augmented_label = [self.train_set['label'][i]] * len(augmented_mr)
                 augmented_clinic_data = [self.train_set['clinic_data'][i]] * len(augmented_mr)

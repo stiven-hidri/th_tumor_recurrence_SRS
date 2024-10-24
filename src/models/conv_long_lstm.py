@@ -11,7 +11,9 @@ class BackboneCNN(nn.Module):
         
         self.backbone = models.resnet34(pretrained=True)
         
-        for param in self.backbone.parameters():
+        for param in self.backbone.conv1.parameters():
+            param.requires_grad = False
+        for param in self.backbone.layer1.parameters():
             param.requires_grad = False
         
         self.backbone.conv1 = nn.Conv2d(in_channels=2,
@@ -24,9 +26,6 @@ class BackboneCNN(nn.Module):
         with torch.no_grad():
             original_weights = self.backbone.conv1.weight
             self.backbone.conv1.weight[:, :2, :, :] = original_weights[:, :2, :, :]
-            
-        for param in self.backbone.parameters():
-            param.requires_grad = False
             
         self.backbone.fc = nn.Identity()
 
