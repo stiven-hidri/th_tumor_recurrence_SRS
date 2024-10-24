@@ -13,7 +13,7 @@ img_lesions_statistics/
 lesions_cropped/
 plots/
 results_csv/
-display/augmentation
-models/saved_models
+src/display/augmentation
+src/models/saved_models
 
 *debug.yaml
