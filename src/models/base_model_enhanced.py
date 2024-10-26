@@ -31,14 +31,14 @@ def generate_resnet34_3d(cuda=True, pretrain_path=os.path.join(os.path.dirname(_
     return model
             
 class BaseModel_Enhanced(nn.Module):
-    def __init__(self, dropout = .1, use_clinical_data=True, out_dim_backbone=512, hidden_size_cd=512):
+    def __init__(self, dropout = .1, use_clinical_data=True, out_dim_backbone=512, hidden_size_cd=10, hidden_size_fc1 = 512, hidden_size_fc2 = 256):
         super(BaseModel_Enhanced, self).__init__()
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.use_clinical_data = use_clinical_data
         
-        input_dim = out_dim_backbone + hidden_size_cd if self.use_clinical_data else out_dim_backbone
+        input_dim = out_dim_backbone*2 + hidden_size_cd if self.use_clinical_data else out_dim_backbone*2
 
         self.backbone = generate_resnet34_3d()
         
@@ -57,28 +57,27 @@ class BaseModel_Enhanced(nn.Module):
         self.dropout = nn.Dropout(p=dropout)  # Dropout with 50% probability
         self.relu = nn.ReLU()
         
-        self.bn0 = nn.BatchNorm1d(input_dim)
+        self.final_fc1 = nn.Linear(input_dim, hidden_size_fc1)
+        self.bn1 = nn.BatchNorm1d(hidden_size_fc1)
         
-        self.bn1 = nn.BatchNorm1d(256)
-        self.final_fc1 = nn.Linear(input_dim, 256)
+        self.final_fc2 = nn.Linear(hidden_size_fc1, hidden_size_fc2)
+        self.bn2 = nn.BatchNorm1d(hidden_size_fc2)        
         
-        self.bn2 = nn.BatchNorm1d(128)        
-        self.final_fc2 = nn.Linear(256, 128)
+        self.final_fc3 = nn.Linear(hidden_size_fc2, 1)
         
-        self.final_fc3 = nn.Linear(128, 1)
     
     def forward(self, mr, rtd, clinical_data):
         mr, rtd = mr.unsqueeze(1), rtd.unsqueeze(1)
         
         feat_mr = self.backbone(mr)
         feat_rtd = self.backbone(rtd)
-
-        feat = torch.mean(torch.stack((feat_mr, feat_rtd)), dim=0)
+        
+        # feat = (feat_mr + feat_rtd) / 2
         
         if self.use_clinical_data:
-            feat = torch.cat([feat, self.cd_backbone(clinical_data)], dim=1)
-            
-        # feat = self.bn0(feat)
+            feat = torch.cat([feat_mr, feat_rtd, self.cd_backbone(clinical_data)], dim=1)
+        else:
+            feat = torch.cat([feat_mr, feat_rtd], dim=1)
         
         out = self.dropout(self.relu(self.bn1(self.final_fc1(feat))))
         out = self.dropout(self.relu(self.bn2(self.final_fc2(out))))

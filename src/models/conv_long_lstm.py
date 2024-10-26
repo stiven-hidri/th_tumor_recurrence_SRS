@@ -27,6 +27,11 @@ class BackboneCNN(nn.Module):
             original_weights = self.backbone.conv1.weight
             self.backbone.conv1.weight[:, :2, :, :] = original_weights[:, :2, :, :]
             
+        for param in self.backbone.conv1.parameters():
+            param.requires_grad = False
+        for param in self.backbone.layer1.parameters():
+            param.requires_grad = False
+            
         self.backbone.fc = nn.Identity()
 
     def forward(self, x):
@@ -56,6 +61,8 @@ class ConvLongLSTM(nn.Module):
             for param in self.cd_backbone.parameters():
                 param.requires_grad = False
 
+        self.layer_norm = nn.LayerNorm(hidden_size)
+
         self.fc = nn.Linear(hidden_size, output_dim)
 
     def forward(self, mr, rtd, clinical_data):
@@ -73,7 +80,7 @@ class ConvLongLSTM(nn.Module):
         else:
             final_features = features
 
-        lstm_out = self.lstm(final_features)
+        lstm_out = self.layer_norm(self.lstm(final_features))
 
         output = self.fc(lstm_out[:, -1, :])
 

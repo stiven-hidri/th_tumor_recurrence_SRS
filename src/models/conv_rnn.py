@@ -11,14 +11,7 @@ device = None
 def generate_resnet34_3d(cuda=True, pretrain_path=os.path.join(os.path.dirname(__file__), 'saved_models', 'resnet_34_23dataset.pth')):
     
     model = ResNet34_3d(shortcut_type='A', no_cuda=not cuda)
-    
-    # if cuda:
-    #     model = model.cuda() 
-    #     model = nn.DataParallel(model)
-    #     net_dict = model.state_dict()
-    # else:
-    #     net_dict = model.state_dict()
-    
+
     net_dict = model.state_dict()
     
     pretrain = torch.load(pretrain_path, map_location=device)
@@ -84,8 +77,8 @@ class ConvRNN(nn.Module):
 
         feats = torch.stack([feat_mr, feat_rtd], dim=1)
         
-        out = self.layer_norm(self.rnn(feats)[:, -1, :])
+        out = self.layer_norm(self.rnn(feats))
         
-        out = self.final_fc(out)
+        out = self.final_fc(out[:, -1, :])
 
         return out

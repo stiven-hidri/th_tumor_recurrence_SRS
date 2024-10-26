@@ -15,15 +15,15 @@ import os
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 param_grid = {
-    'learning_rate': [ .5e-3, 1e-4 ],
-    'batch_size': [ 32, 16 ],
-    'dropout': [ 0.1, .3 ],
-    'weight_decay': [ 1e-4, 1e-3 ],
+    'learning_rate': [ 1e-4 ],
+    'batch_size': [ 2, 4, 8 ],
+    'dropout': [ .3 ],
+    'weight_decay': [ 1e-4 ],
     'gamma_fl': [ 2, 3],
-    'rnn_type': ['gru'],
-    'hidden_size': [8, 16, 32],
+    'rnn_type': [ 'gru' ],
+    'hidden_size': [ 128, 256 ],
     'num_layers': [1],
-    'use_clinical_data': [True]   
+    'use_clinical_data': [False, True]   
 }
 
 if __name__ == '__main__':
@@ -96,7 +96,8 @@ if __name__ == '__main__':
             default_root_dir=config.logger.log_dir,
             max_epochs=config.model.epochs,
             check_val_every_n_epoch=1,
-            gradient_clip_val=1.0,
+            gradient_clip_val=.5,
+            accumulate_grad_batches=2,
             callbacks=[checkpoint_cb, early_stop_callback],
             log_every_n_steps=1,
             num_sanity_val_steps=0,
@@ -136,7 +137,7 @@ if __name__ == '__main__':
             
             module = ClassificationModule.load_from_checkpoint(name=config.model.name, checkpoint_path=path_to_best_checkpoint)
         
-        results = trainer.test(model=module, dataloaders=test_dataloader, verbose=False)
+        results = trainer.test(model=module, dataloaders=test_dataloader, verbose=True)
         
         result_dict = {
             'version': version,

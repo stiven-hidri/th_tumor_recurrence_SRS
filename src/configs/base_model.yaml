@@ -5,7 +5,7 @@ model:
   epochs: 100
   batch_size: 32
   optimizer: adam
-  scheduler: cosine
+  scheduler: plateau
   rnn_type: None
   hidden_size: 0
   num_layers: 0
@@ -15,10 +15,10 @@ model:
   only_test: False
   lf: fl          #wbce, bce, fl
   use_clinical_data: True
-  alpha_fl: .92
+  alpha_fl: .75
   gamma_fl: 3
   pos_weight: .8
-  augmentation_techniques: ['shear', 'flip', 'rotate']
+  augmentation_techniques: ['random_affine']
   p_augmentation: .3
   p_augmentation_per_technique: .3
 logger:

@@ -75,9 +75,6 @@ class ClassificationModule(LightningModule):
 
     def loss_function(self, prediction, label):
         return self.lf.forward(prediction, label)
-    
-    def on_train_start(self):
-        print(self.hparams)
 
     def training_step(self, batch):
         mr, rd, clinic_data, label = batch
@@ -270,7 +267,7 @@ class ClassificationModule(LightningModule):
         
         elif self.scheduler == 'plateau':
             print("Using ReduceLROnPlateau scheduler")
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizers, mode='min', factor=0.5, patience=5, min_lr=1e-12)
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizers, mode='min', factor=0.5, patience=2, min_lr=1e-12)
             return  {
                         'optimizer': optimizers,
                         'lr_scheduler': scheduler,
