@@ -8,6 +8,7 @@ from lightning.pytorch import LightningModule
 from models.base_model import BaseModel
 from models.conv_rnn import ConvRNN
 from models.base_model_enhanced import BaseModel_Enhanced
+from models.model_wdt import ModelWDT
 from models.conv_long_lstm import ConvLongLSTM
 from models.mlp_cd import MlpCD
 from utils.loss_functions import BCELoss, WeightedBCELoss, FocalLoss
@@ -23,6 +24,8 @@ class ClassificationModule(LightningModule):
         # Network
         if 'base_model_enhanced' in name:
             self.model = BaseModel_Enhanced(dropout=dropout, use_clinical_data=use_clinical_data)
+        if 'model_wdt' in name:
+            self.model = ModelWDT(dropout=dropout, use_clinical_data=use_clinical_data)
         elif 'base_model' in name:
             self.model = BaseModel(dropout=dropout, use_clinical_data=use_clinical_data)
         elif 'conv_rnn' in name:
@@ -65,9 +68,11 @@ class ClassificationModule(LightningModule):
         self.validation_outputs = []
         self.validation_losses = []
 
-    def forward(self, mr, rtd, clinic_data):
+    def forward(self, clinic_data, mr=None, rtd=None, mr_rtd_fusion=None):
         if 'mlp_cd' in self.name:
             y = self.model(clinic_data)
+        elif 'model_wdt' in self.name:
+            y = self.model(mr_rtd_fusion, clinic_data)
         else:
             y = self.model(mr, rtd, clinic_data)
             
@@ -77,9 +82,14 @@ class ClassificationModule(LightningModule):
         return self.lf.forward(prediction, label)
 
     def training_step(self, batch):
-        mr, rd, clinic_data, label = batch
         
-        prediction = self(mr, rd, clinic_data)
+        if self.name == 'model_wdt':
+            mr_rtd_fusion, clinic_data, label = batch
+            prediction = self(clinic_data, mr_rtd_fusion=mr_rtd_fusion)
+        else:
+            mr, rtd, clinic_data, label = batch
+            prediction = self(clinic_data, mr = mr, rtd = rtd )
+        
         loss = self.loss_function(prediction, label)
         self.log('train_loss', loss.item(), logger=True, prog_bar=True, on_step=False, on_epoch=True)
         return {"loss": loss}
@@ -105,14 +115,19 @@ class ClassificationModule(LightningModule):
         self.validation_losses = []
 
     def validation_step(self, batch):
-        mr, rd, clinic_data, label = batch
-        prediction = torch.sigmoid(self(mr, rd, clinic_data))
+        if self.name == 'model_wdt':
+            mr_rtd_fusion, clinic_data, label = batch
+            prediction = self(clinic_data, mr_rtd_fusion=mr_rtd_fusion)
+        else:
+            mr, rtd, clinic_data, label = batch
+            prediction = self(clinic_data, mr = mr, rtd = rtd )
+            
         loss = self.loss_function(prediction, label)
         self.log('val_loss', loss.item(), logger=True, prog_bar=True, on_step=False, on_epoch=True)
         
-        for i in range(mr.shape[0]):
+        for i in range(label.shape[0]):
             self.validation_outputs.append((
-                prediction[i],
+                torch.sigmoid(prediction[i]),
                 label[i]
             )
         )
@@ -122,14 +137,16 @@ class ClassificationModule(LightningModule):
         return {"loss": loss}
     
     def test_step(self, batch):
-        mr, rd, clinic_data, label = batch
-        #prediction = self(mr, rd, clinic_data)
+        if self.name == 'model_wdt':
+            mr_rtd_fusion, clinic_data, label = batch
+            prediction = self(clinic_data, mr_rtd_fusion=mr_rtd_fusion)
+        else:
+            mr, rtd, clinic_data, label = batch
+            prediction = self(clinic_data, mr = mr, rtd = rtd )
 
-        prediction = torch.sigmoid(self(mr, rd, clinic_data))
-
-        for i in range(mr.shape[0]):
+        for i in range(label.shape[0]):
             self.test_outputs.append((
-                prediction[i],
+                torch.sigmoid(prediction[i]),
                 label[i],
                 self.loss_function(prediction[i], label[i])    
             ))  
@@ -211,30 +228,30 @@ class ClassificationModule(LightningModule):
             
             print()
 
-        pred_probs = np.array([prediction.cpu().item() for prediction, _, _ in self.test_outputs])
-        fpr, tpr, thresholds = roc_curve(true_labels, pred_probs)
-        fig, ax = plt.subplots(figsize=(6, 6))
+        # pred_probs = np.array([prediction.cpu().item() for prediction, _, _ in self.test_outputs])
+        # fpr, tpr, thresholds = roc_curve(true_labels, pred_probs)
+        # fig, ax = plt.subplots(figsize=(6, 6))
         
-        ax.plot(fpr, tpr, label='ROC Curve', color='blue')
-        ax.plot([0, 1], [0, 1], 'k--', label='Chance Level')
-        ax.set_xlabel('FPR')
-        ax.set_ylabel('TPR')
-        ax.set_title('ROC')
+        # ax.plot(fpr, tpr, label='ROC Curve', color='blue')
+        # ax.plot([0, 1], [0, 1], 'k--', label='Chance Level')
+        # ax.set_xlabel('FPR')
+        # ax.set_ylabel('TPR')
+        # ax.set_title('ROC')
 
-        for i, threshold in enumerate(thresholds):
-            ax.annotate(f'{threshold:.2f}', (fpr[i], tpr[i]), textcoords="offset points", xytext=(0,10), ha='center')
+        # for i, threshold in enumerate(thresholds):
+        #     ax.annotate(f'{threshold:.2f}', (fpr[i], tpr[i]), textcoords="offset points", xytext=(0,10), ha='center')
 
-        ax.legend()
-        fig.canvas.draw()
+        # ax.legend()
+        # fig.canvas.draw()
         
-        plot_image = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-        plot_image = plot_image.copy() 
-        plot_image = torch.from_numpy(plot_image)
-        plot_image = plot_image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        # plot_image = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+        # plot_image = plot_image.copy() 
+        # plot_image = torch.from_numpy(plot_image)
+        # plot_image = plot_image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
 
-        self.logger.experiment.add_image(f'ROC_Curve.png', plot_image, self.current_epoch, dataformats='HWC')
+        # self.logger.experiment.add_image(f'ROC_Curve.png', plot_image, self.current_epoch, dataformats='HWC')
 
-        plt.close(fig)
+        # plt.close(fig)
 
     def configure_optimizers(self):
         scheduler = None
@@ -267,7 +284,7 @@ class ClassificationModule(LightningModule):
         
         elif self.scheduler == 'plateau':
             print("Using ReduceLROnPlateau scheduler")
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizers, mode='min', factor=0.5, patience=2, min_lr=1e-12)
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizers, mode='min', factor=0.5, patience=1, min_lr=1e-12)
             return  {
                         'optimizer': optimizers,
                         'lr_scheduler': scheduler,

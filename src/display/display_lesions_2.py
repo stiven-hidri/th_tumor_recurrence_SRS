@@ -10,7 +10,7 @@ def plot(stuff, label, progressive):
     indexes = np.where(np.sum(stuff[1], axis=(1, 2)) > 0)[0]  # Find non-empty slices more efficiently
     c = 6 if len(indexes) >= 6 else len(indexes)  # Number of columns (slices)
     indexes = np.linspace(min(indexes), max(indexes), c+2, dtype=int)[1:-1]
-    labels = ['MRI', 'RTD']
+    labels = ['MRI', 'RTD','WDT_FUSION']
     
     fig = plt.figure(figsize=(13, 8))  # Optional: Smaller figure size
     plt.tight_layout(pad=0, w_pad=0, h_pad=0)  # Adjust values as needed
@@ -59,9 +59,9 @@ if __name__ == '__main__':
         if file_split.endswith('.pkl'):    
             with open(os.path.join(path_to_data_folder, file_split), 'rb') as input_file:
                 data = pickle.load(input_file)    
-            images.extend([ [np.array(data['mr'][i]), np.array(data['rtd'][i])] for i in range(len(data['mr']))])
+            images.extend([ [np.array(data['mr'][i]), np.array(data['rtd'][i]), np.array(data['mr_rtd_fusion'][i])] for i in range(len(data['mr']))])
             labels.extend(data['label'].squeeze().tolist())
     
-    for i in range(len(images)):
+    for i in range(10):
         print(f'\r{i+1}/{len(images)}', end='')
         plot(images[i], int(labels[i]), i)

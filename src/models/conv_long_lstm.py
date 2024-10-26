@@ -9,7 +9,7 @@ class BackboneCNN(nn.Module):
     def __init__(self):
         super(BackboneCNN, self).__init__()
         
-        self.backbone = models.resnet34(pretrained=True)
+        self.backbone = models.resnet18(pretrained=True)
         
         for param in self.backbone.conv1.parameters():
             param.requires_grad = False

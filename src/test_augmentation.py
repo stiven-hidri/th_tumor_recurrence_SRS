@@ -6,23 +6,22 @@ from utils.augment import *
 from utils.utils import clear_directory_content
 
 def test_augmentation():
-    MAX_SAMPLES = 5
     path_to_data_folder = os.path.join(os.path.dirname(__file__),'..', 'data', 'processed')
     file_names = [f for f in os.listdir(path_to_data_folder) if 'train' in f]
     #augmentations = [shear, brightness, flip, elastic]
-    augmentations = [random_affine]
+    augmentations = [random_flip, random_rotate]
     #augmentation_names = ['shear', 'brightness', 'flip', 'elastic']
-    augmentation_names = ['random_affine']
+    augmentation_names = ['random_flip', 'random_rotate']
     OUTPUT_PATH = os.path.join(os.path.dirname(__file__), 'display', 'augmentation')
     os.makedirs(OUTPUT_PATH, exist_ok=True)
-    chosen_samples = [137, 68, 160, 192, 28]
     clear_directory_content(OUTPUT_PATH)
     
     for file_split in file_names:
         if file_split.endswith('.pkl'):
             with open(os.path.join(path_to_data_folder, file_split), 'rb') as input_file:
                 data = pickle.load(input_file)
-                #numbers = list(range(len(data['mr'])))
+                chosen_samples = np.argsort([np.sum(m.cpu().detach().numpy() > 0) for m in data['mr']])[-6:-1]
+                MAX_SAMPLES = len(chosen_samples)
                 for cnt, i_sample in enumerate(chosen_samples):
                     print(f"{cnt+1}/{MAX_SAMPLES}", end='\r')
                     mr, rtd = data['mr'][i_sample], data['rtd'][i_sample]

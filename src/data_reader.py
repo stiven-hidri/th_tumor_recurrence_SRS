@@ -15,6 +15,7 @@ import SimpleITK as sitk
 import numpy as np
 import torch.nn.functional as F
 from scipy.spatial.distance import pdist, squareform
+import pywt
 
 class RawData_Reader():
     def __init__(self) -> None:
@@ -56,10 +57,36 @@ class RawData_Reader():
         
         self.__generate_split__()
         self.__normalize_splits__()
+        self.__wdt_fusion__()
         self.__one_hot__()
-        self.__augment_train_set__()
+        # self.__augment_train_set__()
         self.__save__(raw=False)
+        
+        self.__print_statistics__()
+        
         print('Done!', end='\r')
+
+    def __wdt_fusion__(self):
+        for i_split, split in enumerate(self.ALL_SPLITS):
+            for i_tensor in range(len(split['mr'])):
+        
+                coeffs_mr = pywt.dwtn(split['mr'][i_tensor], 'db1', axes=(0, 1, 2))  # Decompose with Daubechies wavelet
+                coeffs_rtd = pywt.dwtn(split['rtd'][i_tensor], 'db1', axes=(0, 1, 2))
+                    
+                # fused_details_avg = {key: (coeffs_mr[key]*.6 + coeffs_rtd[key]*.4) for key in coeffs_mr.keys()}
+
+                fused_details_e = {}
+                for key in coeffs_mr.keys():
+                    if key == 'aaa':  # Skip approximation coefficients for energy fusion
+                        fused_details_e[key] = (coeffs_mr[key] + coeffs_rtd[key]) / 2
+                    else:
+                        energy1 = np.abs(coeffs_mr[key]) ** 2
+                        energy2 = np.abs(coeffs_rtd[key]) ** 2
+                        fused_details_e[key] = np.where(energy1 > energy2, coeffs_mr[key], coeffs_rtd[key])
+
+                fused_image_e = pywt.idwtn(fused_details_e, 'db1', axes=(0, 1, 2))
+                fused_image_e = torch.Tensor(fused_image_e) * ( split['mr'][i_tensor] > 0 )
+                self.ALL_SPLITS[i_split]['mr_rtd_fusion'].append(fused_image_e)
         
     def full_run(self, cleanOutDir = True):
         self.__adjust_dataframes__()
@@ -110,8 +137,12 @@ class RawData_Reader():
         
         self.__generate_split__()
         self.__normalize_splits__()
+        
+        self.__wdt_fusion__()
         self.__one_hot__()
-        self.__augment_train_set__()
+        # self.__augment_train_set__()
+        self.__print_statistics__()
+        
         self.__save__(raw=False)
         
         print('\nData has been read successfully!\n')
@@ -376,7 +407,7 @@ class RawData_Reader():
         statistics = {}
                 
         for key in data.keys():
-            if key != 'label':
+            if key != 'label' and key != 'mr_rtd_fusion':
                 current_data = torch.cat([tensor.view(-1) for tensor in data[key]])
                 
                 if key == 'clinic_data':
@@ -437,9 +468,9 @@ class RawData_Reader():
     def __generate_split__(self):
         self.__split_subjects__()
         #final outputs 
-        self.train_set = {'mr': [], 'rtd': [], 'clinic_data': [], 'label': []}
-        self.val_set = {'mr': [], 'rtd': [], 'clinic_data': [], 'label': []}
-        self.test_set = {'mr': [], 'rtd': [], 'clinic_data': [], 'label': []}
+        self.train_set = {'mr': [], 'rtd': [], 'clinic_data': [], 'label': [], 'mr_rtd_fusion': []}
+        self.val_set = {'mr': [], 'rtd': [], 'clinic_data': [], 'label': [], 'mr_rtd_fusion': []}
+        self.test_set = {'mr': [], 'rtd': [], 'clinic_data': [], 'label': [], 'mr_rtd_fusion': []}
         
         for i, subject_id in enumerate(self.global_data['subject_id']):
             target = None
@@ -496,6 +527,13 @@ class RawData_Reader():
             'test': subjects_test,
             'val': subjects_val
         }
+
+    def __print_statistics__(self):
+        split_names = ['train', 'val', 'test']
+        for i, split in enumerate(self.ALL_SPLITS):
+            labels, counts = np.unique([x for x in split['label']], return_counts=True)
+            print(f'{split_names[i]}: {dict(zip(labels, counts))}')
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

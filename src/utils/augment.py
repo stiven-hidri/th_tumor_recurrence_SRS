@@ -14,9 +14,12 @@ def gaussian_noise(mr, rtd):
     mask = mr == 0
     noise = torch.randn(mr.size()) * .02 + 0.0
     
-    mr, rtd = mr + noise, rtd + noise
+    mr = mr + noise
+    rtd = rtd + noise if rtd is not None else None
+    
     mr[mask] = 0
-    rtd[mask] = 0
+    rtd[mask] = 0 if rtd is not None else None
+    
     return mr, rtd
 
 def brightness(mr, rtd):
@@ -32,21 +35,23 @@ def brightness(mr, rtd):
     
     mr, rtd = mr.numpy(), rtd.numpy()
     
-    mr_new, rtd_new = np.zeros(mr.shape), np.zeros(rtd.shape)
+    mr_new = np.zeros(mr.shape)
+    rtd_new = np.zeros(rtd.shape) if rtd is not None else None
     
     gain, gamma = (1.5-.5) * np.random.random_sample(2,) + .5
     
     mr_new = np.sign(mr) * gain * (np.abs(mr)**gamma)
-    rtd_new = np.sign(rtd) * gain * (np.abs(rtd)**gamma)
+    rtd_new = np.sign(rtd) * gain * (np.abs(rtd)**gamma) if rtd is not None else None
     
     mr_new = torch.Tensor(mr_new).to(torch.float32)
-    rtd_new = torch.Tensor(rtd_new).to(torch.float32)
+    rtd_new = torch.Tensor(rtd_new).to(torch.float32) if rtd is not None else None
 
     return mr_new, rtd_new
 
-def shear(mr, rtd):
+def shear(mr, rtd=None):
     # Step 1: Convert tensor to SimpleITK Image
-    mr, rtd = sitk.GetImageFromArray(mr), sitk.GetImageFromArray(rtd)
+    mr = sitk.GetImageFromArray(mr)
+    rtd = sitk.GetImageFromArray(rtd) if rtd is not None else None
 
     # Step 2: Generate random shearing factors for a random axis
     shear_factors = [random.uniform(-1., 1.) for _ in range(2)]  # Random shear values
@@ -65,28 +70,29 @@ def shear(mr, rtd):
     # Step 4: Apply the shear transformation
     center = mr.TransformContinuousIndexToPhysicalPoint([(size-1)/2.0 for size in mr.GetSize()])
     shear_transform.SetCenter(center)
-    mr, rtd = sitk.Resample(mr, shear_transform, sitk.sitkLinear, 0, mr.GetPixelID()), sitk.Resample(rtd, shear_transform, sitk.sitkLinear, 0, rtd.GetPixelID())
+    mr = sitk.Resample(mr, shear_transform, sitk.sitkLinear, 0, mr.GetPixelID())
+    rtd = sitk.Resample(rtd, shear_transform, sitk.sitkLinear, 0, rtd.GetPixelID()) if rtd is not None else None
 
     # Step 6: Convert back to tensor (numpy array)
     mr = torch.Tensor(sitk.GetArrayFromImage(mr)).to(torch.float32)
-    rtd = torch.Tensor(sitk.GetArrayFromImage(rtd)).to(torch.float32)
+    rtd = torch.Tensor(sitk.GetArrayFromImage(rtd)).to(torch.float32) if rtd is not None else None
     
     return mr, rtd
 
-def flip(mr, rtd):
+def flip(mr, rtd=None):
     axis = random.choice([0, 1, 2])
     
     mr = torch.flip(mr, dims=[axis])
-    rtd = torch.flip(rtd, dims=[axis])
+    rtd = torch.flip(rtd, dims=[axis]) if rtd is not None else None
         
     return mr, rtd
 
-def rotate(mr, rtd):
+def rotate(mr, rtd=None):
     axis = random.choice([(1,2), (0,2), (0,1)]) # x, y, z 
     k = np.random.choice([1, 2, 3])
     
     mr = torch.rot90(mr, k=k, dims=axis)
-    rtd = torch.rot90(rtd, k=k, dims=axis)
+    rtd = torch.rot90(rtd, k=k, dims=axis) if rtd is not None else None
         
     return mr, rtd
 
@@ -114,47 +120,63 @@ def random_translate(mr, rtd, translate_range=(-10, 10)):
     tz = random.randint(translate_range[0], translate_range[1])
     
     mr = F.pad(mr, (abs(tx), abs(tx), abs(ty), abs(ty), abs(tz), abs(tz)), mode='constant', value=0)
-    rtd = F.pad(rtd, (abs(tx), abs(tx), abs(ty), abs(ty), abs(tz), abs(tz)), mode='constant', value=0)
+    rtd = F.pad(rtd, (abs(tx), abs(tx), abs(ty), abs(ty), abs(tz), abs(tz)), mode='constant', value=0)if rtd is not None else None
     
     mr = mr[:, :, abs(tz) + tz : abs(tz) + tz + D, abs(ty) + ty : abs(ty) + ty + H, abs(tx) + tx : abs(tx) + tx + W]
-    rtd = rtd[:, :, abs(tz) + tz : abs(tz) + tz + D, abs(ty) + ty : abs(ty) + ty + H, abs(tx) + tx : abs(tx) + tx + W]
+    rtd = rtd[:, :, abs(tz) + tz : abs(tz) + tz + D, abs(ty) + ty : abs(ty) + ty + H, abs(tx) + tx : abs(tx) + tx + W]if rtd is not None else None
     
     mr = mr.squeeze()  
-    rtd = rtd.squeeze()
+    rtd = rtd.squeeze()if rtd is not None else None
     
     return mr, rtd
 
 import torchio as tio
 
-def random_affine(mr, rtd):
+def random_affine(mr, rtd=None):
     
     mr = mr.unsqueeze(0)
-    rtd = rtd.unsqueeze(0)
+    rtd = rtd.unsqueeze(0)if rtd is not None else None
     
     subject1 = tio.Subject(image=tio.ScalarImage(tensor=mr))
-    subject2 = tio.Subject(image=tio.ScalarImage(tensor=rtd))
+    subject2 = tio.Subject(image=tio.ScalarImage(tensor=rtd)) if rtd is not None else None
 
     # Create a random rotation transform
     deg = random.randint(-30, 30)
     transl = random.randint(-5, 5)
-    scale = random.uniform(0.85, 1.15)
     
-    transform = tio.RandomAffine(degrees=(deg, deg), translation=(transl, transl), scales=(scale, scale), isotropic=True, image_interpolation='linear')
-    #['nearest', 'linear', 'bspline', 'gaussian', 'label_gaussian', 'hamming', 'cosine', 'welch', 'lanczos', 'blackman']
+    transform = tio.RandomAffine(degrees=(deg, deg), translation=(transl, transl), isotropic=True, image_interpolation='linear')
+    
     # Apply the transformation to both subjects
     transformed_subject1 = transform(subject1)
-    transformed_subject2 = transform(subject2)
+    transformed_subject2 = transform(subject2) if rtd is not None else None
 
     # Retrieve the rotated tensors
-    mr_rotated = transformed_subject1['image'].data
-    rtd_rotated = transformed_subject2['image'].data
+    mr_at = transformed_subject1['image'].data
+    rtd_at = transformed_subject2['image'].data if rtd is not None else None
     
-    mr_rotated = mr_rotated.squeeze()
-    rtd_rotated = rtd_rotated.squeeze()
+    mr_at = mr_at.squeeze()
+    rtd_at = rtd_at.squeeze() if rtd is not None else None
 
-    return mr_rotated, rtd_rotated
+    return mr_at, rtd_at
 
-def combine_aug(mr, rtd, p_augmentation=.3, augmentations_techinques=['shear', 'gaussian_noise', 'flip', 'rotate' 'brightness', 'random_translate', 'random_rotate_3d']):
+def random_rotate(mr, rtd=None):
+    axis = random.choice([(1,2), (0,2), (0,1)])
+    k = random.choice([1, 2, 3])
+    
+    mr = torch.rot90(mr, k=k, dims=axis)
+    rtd = torch.rot90(rtd, k=k, dims=axis) if rtd is not None else None
+        
+    return mr, rtd
+
+def random_flip(mr, rtd=None):
+    axis = random.choice([0, 1, 2])
+    
+    mr = torch.flip(mr, dims=[axis])
+    rtd = torch.flip(rtd, dims=[axis]) if rtd is not None else None
+    
+    return mr, rtd
+
+def combine_aug(mr, rtd=None, p_augmentation=.3, augmentations_techinques=['shear', 'gaussian_noise', 'flip', 'rotate' 'brightness', 'random_translate', 'random_affine', 'random_rotate', 'random_flip']):
     
     augmentations = {
         'shear': shear, 
@@ -163,8 +185,12 @@ def combine_aug(mr, rtd, p_augmentation=.3, augmentations_techinques=['shear', '
         'brightness':brightness,
         'rotate':rotate,
         'random_translate':random_translate,
-        'random_affine':random_affine
+        'random_affine':random_affine,
+        'random_rotate':random_rotate,
+        'random_flip':random_flip
     }
+    
+    augmentations_techinques = random.choices([random.choice(['random_rotate','random_flip']), random.choice(['shear','random_affine'])] , k=random.randint(1, 2))
         
     if random.random() <= p_augmentation:
         augmentations = [augmentations[a] for a in augmentations_techinques if a in list(augmentations.keys())]
@@ -173,6 +199,6 @@ def combine_aug(mr, rtd, p_augmentation=.3, augmentations_techinques=['shear', '
         augmentations_to_be_performed = random.sample(augmentations, n_augmentations_to_be_performed)
         
         for aug in augmentations_to_be_performed:
-            mr, rtd = aug(mr, rtd)
+            mr, rtd = aug(mr, rtd=rtd)
 
     return mr, rtd
