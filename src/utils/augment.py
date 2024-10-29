@@ -142,9 +142,10 @@ def random_affine(mr, rtd=None):
 
     # Create a random rotation transform
     deg = random.randint(-30, 30)
-    transl = random.randint(-5, 5)
+    transl = random.randint(-10, 10)
+    scale = random.uniform(.85, 1.15)
     
-    transform = tio.RandomAffine(degrees=(deg, deg), translation=(transl, transl), isotropic=True, image_interpolation='linear')
+    transform = tio.RandomAffine(degrees=(deg, deg), translation=(transl, transl), scales=(scale, scale), isotropic=True, image_interpolation='linear')
     
     # Apply the transformation to both subjects
     transformed_subject1 = transform(subject1)

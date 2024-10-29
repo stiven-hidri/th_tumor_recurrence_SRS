@@ -33,12 +33,12 @@ class LSTMModel(nn.Module):
         )
 
     def forward(self, x):
-        # h0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim).cuda().requires_grad_()
-        # c0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim).cuda().requires_grad_()
+        h0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim).cuda().requires_grad_()
+        c0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim).cuda().requires_grad_()
         
-        # out, (hn, cn) = self.lstm(x, (h0.detach(), c0.detach()))
+        out, (hn, cn) = self.lstm(x, (h0.detach(), c0.detach()))
         
-        out, _ = self.lstm(x)
+        # out, _ = self.lstm(x)
 
         return out
 

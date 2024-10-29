@@ -9,9 +9,9 @@ def test_augmentation():
     path_to_data_folder = os.path.join(os.path.dirname(__file__),'..', 'data', 'processed')
     file_names = [f for f in os.listdir(path_to_data_folder) if 'train' in f]
     #augmentations = [shear, brightness, flip, elastic]
-    augmentations = [random_flip, random_rotate]
+    augmentations = [random_affine]
     #augmentation_names = ['shear', 'brightness', 'flip', 'elastic']
-    augmentation_names = ['random_flip', 'random_rotate']
+    augmentation_names = ['random_affine']
     OUTPUT_PATH = os.path.join(os.path.dirname(__file__), 'display', 'augmentation')
     os.makedirs(OUTPUT_PATH, exist_ok=True)
     clear_directory_content(OUTPUT_PATH)

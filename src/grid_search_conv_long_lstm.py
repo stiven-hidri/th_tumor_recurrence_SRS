@@ -17,15 +17,15 @@ torch.set_num_threads(8)
 torch.cuda.set_per_process_memory_fraction(fraction=.33, device=None)
 
 param_grid = {
-    'learning_rate':        [ 5e-5, 1e-4 ],
+    'learning_rate':        [ 1e-4 ],
     'batch_size':           [ 2 ],
-    'dropout':              [ .3, .5 ],
-    'weight_decay':         [ 1e-4, 1e-3 ],
-    'num_layers':           [ 1 ],
-    'hidden_size':          [ 64, 128, 256 ],
+    'dropout':              [ .3 ],
+    'weight_decay':         [ 1e-4 ],
+    'num_layers':           [ 1, 2 ],
+    'hidden_size':          [ 32, 64, 128, 256 ],
     'gamma_fl':             [ 2, 3 ],
-    'p_augmentation':       [ .3, .5, .7 ],
-    'use_clinical_data':    [ True ]
+    'p_augmentation':       [ .3, .5, .7  ],
+    'use_clinical_data':    [ False, True ]
 }
 
 if __name__ == '__main__':

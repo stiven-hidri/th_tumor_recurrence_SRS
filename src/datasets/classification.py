@@ -57,4 +57,4 @@ class ClassifierDataset(Dataset):
         return train, test, val
     
     def create_splits(self):
-        return ClassifierDatasetSplit(self.train, 'train', p_augmentation=self.p_augmentation, augmentation_techniques=self.augmentation_techniques), ClassifierDatasetSplit(self.test, 'test'), ClassifierDatasetSplit(self.val, 'val')
+        return ClassifierDatasetSplit(self.train, 'train', p_augmentation=self.p_augmentation, augmentation_techniques=self.augmentation_techniques), ClassifierDatasetSplit(self.val, 'val'), ClassifierDatasetSplit(self.test, 'test')
