@@ -5,20 +5,20 @@ model:
   epochs: 150
   batch_size: 2
   optimizer: adam
-  scheduler: cosine
+  scheduler: plateau
   rnn_type: none
-  hidden_size: 32
+  hidden_size: 256
   num_layers: 1
-  learning_rate: 5e-5
-  weight_decay: 1e-4
+  learning_rate: 1e-4
+  weight_decay: 1e-3
   dropout: .3
   only_test: False
   use_clinical_data: True
   lf: fl          #wbce, bce, fl
-  alpha_fl: .92
+  alpha_fl: .923
   gamma_fl: 2
   pos_weight: .8
-  augmentation_techniques: ['shear', 'flip', 'rotate']
+  augmentation_techniques: ['random_affine', 'shear', 'random_rotate', 'random_flip']
   p_augmentation: .3
   p_augmentation_per_technique: .4
 logger:

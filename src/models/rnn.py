@@ -14,6 +14,8 @@ class RNNModel(nn.Module):
         h0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim).cuda().requires_grad_()
         out, h0 = self.rnn(x, h0.detach())
 
+        # out, _ = self.rnn(x)
+
         return out
 
 
@@ -35,6 +37,8 @@ class LSTMModel(nn.Module):
         c0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim).cuda().requires_grad_()
         
         out, (hn, cn) = self.lstm(x, (h0.detach(), c0.detach()))
+        
+        # out, _ = self.lstm(x)
 
         return out
 
@@ -52,5 +56,7 @@ class GRUModel(nn.Module):
         h0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim).cuda().requires_grad_()
 
         out, _ = self.gru(x, h0.detach())
+        
+        # out, _ = self.gru(x)
 
         return out

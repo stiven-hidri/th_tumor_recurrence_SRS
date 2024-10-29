@@ -1,18 +1,19 @@
 from itertools import product
-import pprint
-import random
 import re
 from lightning.pytorch import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
 import pandas as pd
+import torch
 from torch.utils.data import DataLoader
 from utils import Parser
 from datasets import ClassifierDataset
 from modules import ClassificationModule
-import yaml
 import os
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+
+torch.set_num_threads(8)
+torch.cuda.set_per_process_memory_fraction(fraction=.33, device=None)
 
 param_grid = {
     'learning_rate': [1e-2, 1e-3, 1e-4],

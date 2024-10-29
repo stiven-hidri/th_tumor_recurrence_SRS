@@ -1,8 +1,18 @@
+Ciao cugina!
+I'm working on a dataset that includes information about patients with brain metastases.
+My problem is that some clinical information lack homogenity and are too specific. I need less, more generic and homogeneus values.
+Thus I tried myself to map each value to cleaner and less specific version.
+The 3 clinical features that I need to deal with are: ROI (region on interest i.e. lesion location), primary tumor location, tumor histology
+These are the results of my translation. I don't need you to go through all of them but if you happen to be familiar with these values I can show you how I performed the translation and you can tell me if it is "medically" correct or not.
+This would be very helpful since it will surely improve the performance of my AI model that is trying to predict the local progression (i.e. stabilty vs recurrence) of brain metastases after stereotactic radio surgery (Gamma Knife precisely)
 
-
-LISTS
-
+------------------------
 ROIs
+
+On the left the original ROI (region of interest i.e. lesion location)
+On the right my translation to a less specific roi
+
+ROIs:
 [   ('R atrium', 'right ventricle'),
     ('L Temporal', 'left temporal'),
     ('Rt Frontal', 'right frontal'),
@@ -249,6 +259,11 @@ ROIs
     ('Rt temporal', 'right temporal')]
 
 METSs
+
+Here we have on the left the original tumor location
+On the right there is my translation (cleaner and sometimes less specific)
+
+METSs:
 [   ('Mets Ovary ', 'ovary'),
     ('Mets Ovary ', 'ovary'),
     ('Mets Ovary ', 'ovary'),
@@ -493,6 +508,9 @@ METSs
     ('Brain Mets - Lung', 'lung'),
     ('Brain Mets - Lung', 'lung'),
     ('Brain Mets - Lung', 'lung')]
+
+Here we have the original histology of the tumor
+On the right we have my translation (cleaner and sometimes less specific)
 
 PRIMs
 [   ('Serous carcinoma', 'serous carcinoma'),
@@ -739,69 +757,3 @@ PRIMs
     ('Adenocarcinoma of the lung', 'adenocarcinoma'),
     ('Adenocarcinoma of the lung', 'adenocarcinoma'),
     ('Adenocarcinoma of the lung', 'adenocarcinoma')]
-
-SETS
-
-
-
-ROIs
-{   'cerebellar',
-    'left capsule',
-    'left cerebellar',
-    'left frontal',
-    'left insula',
-    'left medial',
-    'left occipital',
-    'left parietal',
-    'left temporal',
-    'left ventricle',
-    'occipital',
-    'occipital_tent',
-    'pons',
-    'right capsule',
-    'right cerebellar',
-    'right frontal',
-    'right medial',
-    'right occipital',
-    'right parietal',
-    'right putamen',
-    'right temporal',
-    'right thalamus',
-    'right ventricle',
-    'vermis'}
-
-METSs
-{'', 'urinary_system', 'ovary', 'skin', 'lung', 'esophagus', 'breast', 'uterus'}
-
-PRIMs
-{   '',
-    'adenocarcinoma',
-    'carcinoma',
-    'ductal carcinoma',
-    'large cell carcinoma',
-    'melanoma',
-    'non small cell carcinoma',
-    'serous carcinoma',
-    'small cell carcinoma',
-    'squamous cell carcinoma'}
-
-ROIS: 24	METS: 8	PRIM: 10
-
-
-WORDS: 16
-{   'capsule',
-    'cerebellar',
-    'frontal',
-    'insula',
-    'left',
-    'medial',
-    'occipital',
-    'occipital_tent',
-    'parietal',
-    'pons',
-    'putamen',
-    'right',
-    'temporal',
-    'thalamus',
-    'ventricle',
-    'vermis'}

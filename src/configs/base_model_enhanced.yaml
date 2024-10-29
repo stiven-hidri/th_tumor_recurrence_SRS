@@ -1,29 +1,29 @@
 dataset:
   name: name
 model:
-  name: conv_rnn
-  epochs: 150
-  batch_size: 2
+  name: base_model_enhanced
+  epochs: 100
+  batch_size: 32
   optimizer: adam
   scheduler: plateau
-  learning_rate: 1e-4
+  rnn_type: None
+  hidden_size: 0
+  num_layers: 0
+  learning_rate: 5e-5
   weight_decay: 1e-3
-  rnn_type: rnn  #rnn, lstm, gru, gru2
-  hidden_size: 64
-  num_layers: 1
-  dropout: .3
+  dropout: .5
   only_test: False
-  use_clinical_data: True
   lf: fl          #wbce, bce, fl
+  use_clinical_data: True
   alpha_fl: .923
-  gamma_fl: 2
-  pos_weight: 6
+  gamma_fl: 3
+  pos_weight: .8
   augmentation_techniques: ['random_affine', 'shear', 'random_rotate', 'random_flip']
   p_augmentation: .3
-  p_augmentation_per_technique: .5
+  p_augmentation_per_technique: .3
 logger:
   log_dir: ./log
-  experiment_name: train_conv_rnn
+  experiment_name: train_base_model
   version: 1
 checkpoint:
   monitor: val_loss

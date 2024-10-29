@@ -1,6 +1,4 @@
 from itertools import product
-import pprint
-import random
 import re
 from lightning.pytorch import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint
@@ -10,19 +8,24 @@ from torch.utils.data import DataLoader
 from utils import Parser
 from datasets import ClassifierDataset
 from modules import ClassificationModule
-import yaml
 import os
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
+import torch
+
+torch.set_num_threads(8)
+torch.cuda.set_per_process_memory_fraction(fraction=.33, device=None)
+
 param_grid = {
-    'learning_rate': [1e-4, 1e-5],
-    'batch_size': [2, 4],
-    'dropout': [.3],
-    'weight_decay': [1e-4, 1e-3],
-    'num_layers': [1, 2],
-    'hidden_size': [64, 128, 256],
-    'gamma_fl': [2, 3],
-    'use_clinical_data': [False, True]
+    'learning_rate':        [ 1e-4 ],
+    'batch_size':           [ 2 ],
+    'dropout':              [ .3 ],
+    'weight_decay':         [ 1e-4 ],
+    'num_layers':           [ 1, 2 ],
+    'hidden_size':          [ 32, 64, 128, 256 ],
+    'gamma_fl':             [ 2, 3 ],
+    'p_augmentation':       [ .3, .5, .7  ],
+    'use_clinical_data':    [ False, True ]
 }
 
 if __name__ == '__main__':
@@ -33,7 +36,7 @@ if __name__ == '__main__':
 
     version = 0
     
-    all_param_combinations = list(product(param_grid['learning_rate'], param_grid['batch_size'], param_grid['dropout'], param_grid['weight_decay'], param_grid['num_layers'], param_grid['hidden_size'], param_grid['gamma_fl'], param_grid['use_clinical_data']))
+    all_param_combinations = list(product(param_grid['learning_rate'], param_grid['batch_size'], param_grid['dropout'], param_grid['weight_decay'], param_grid['num_layers'], param_grid['hidden_size'], param_grid['gamma_fl'], param_grid['p_augmentation'], param_grid['use_clinical_data']))
 
     max_cnt = len(list(all_param_combinations))
     # Iterate over all combinations of hyperparameters
@@ -42,7 +45,7 @@ if __name__ == '__main__':
     classifier_dataset = ClassifierDataset()
     train_split, val_split, test_split = classifier_dataset.create_splits()
     
-    for i, (lr, batch_size, dropout, weight_decay, num_layers, hidden_size, gamma_fl, use_clinical_data) in enumerate(all_param_combinations):
+    for i, (lr, batch_size, dropout, weight_decay, num_layers, hidden_size, gamma_fl, p_augmentation, use_clinical_data) in enumerate(all_param_combinations):
         print(f"\n*********\n{i+1}/{max_cnt}\n*********\n")
             
         train_dataloader = DataLoader(train_split, batch_size=batch_size, shuffle=True, num_workers=4, persistent_workers=True)
@@ -72,7 +75,7 @@ if __name__ == '__main__':
             experiment_name =               config.logger.experiment_name,
             version =                       str(version),
             augmentation_techniques =       config.model.augmentation_techniques,
-            p_augmentation =                config.model.p_augmentation,
+            p_augmentation =                p_augmentation,
             p_augmentation_per_technique =  config.model.p_augmentation_per_technique
         )
 
@@ -86,7 +89,7 @@ if __name__ == '__main__':
             mode=config.checkpoint.mode
         )
         
-        early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=4, verbose=False, mode="min")
+        early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=5, verbose=True, mode="min")
 
         #Trainer
         trainer = Trainer(
@@ -146,6 +149,7 @@ if __name__ == '__main__':
             'num_layers': num_layers,
             'hidden_size': hidden_size,
             'gamma_fl': gamma_fl,
+            'p_augmentation': p_augmentation,
             'use_clinical_data': use_clinical_data,
             **results[0]  # results[0] is the dictionary returned by the test method
         }
@@ -156,6 +160,6 @@ if __name__ == '__main__':
     # Convert the results list to a pandas DataFrame
     df_results = pd.DataFrame(results_list)
 
-    df_results.to_csv(os.path.join(os.path.dirname(__file__), 'results_csv', f"gridsearch_fl_convlstm.csv"), index=False)
+    df_results.to_csv(os.path.join(os.path.dirname(__file__), 'results_csv', f"{config.logger.experiment_name}.csv"), index=False)
 
     print("\nDone!\n")

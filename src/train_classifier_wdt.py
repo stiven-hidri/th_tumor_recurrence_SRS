@@ -3,7 +3,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
 from torch.utils.data import DataLoader
 from utils import Parser
-from datasets import ClassifierDataset
+from datasets.classification_wdt import ClassifierDatasetWDT
 from modules import ClassificationModule
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 import yaml
@@ -15,7 +15,7 @@ if __name__ == '__main__':
     config, device = parser.parse_args()
 
     # Load sources
-    classifier_dataset = ClassifierDataset(p_augmentation=config.model.p_augmentation, augmentation_techniques=config.model.augmentation_techniques)
+    classifier_dataset = ClassifierDatasetWDT(p_augmentation=config.model.p_augmentation, augmentation_techniques=config.model.augmentation_techniques)
 
     # Create train-val-test splits
     train_split, val_split, test_split = classifier_dataset.create_splits()

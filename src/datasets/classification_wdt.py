@@ -5,7 +5,7 @@ from utils.augment import combine_aug
 from torchvision import transforms
 
 
-class ClassifierDatasetSplit(Dataset):
+class ClassifierDatasetSplitWDT(Dataset):
     def __init__(self, data: dict, split_name: str, p_augmentation=.0, augmentation_techniques=[]):
         self.data = data
         self.split_name = split_name
@@ -19,21 +19,20 @@ class ClassifierDatasetSplit(Dataset):
         return len(self.data['label'])
     
     def __getitem__(self, idx):
-        mr = self.data['mr'][idx]
-        rtd = self.data['rtd'][idx]
+        mr_rtd_fusion = self.data['mr_rtd_fusion'][idx]
         clinic_data = self.data['clinic_data'][idx]
         label = self.data['label'][idx]
         
         if self.split_name == 'train':
-            mr, rtd = combine_aug(mr, rtd, p_augmentation=self.p_augmentation, augmentations_techinques=self.augmentation_techniques)
+            mr_rtd_fusion, _ = combine_aug(mr_rtd_fusion, rtd=None, p_augmentation=self.p_augmentation, augmentations_techinques=self.augmentation_techniques)
         
-        return mr, rtd, clinic_data, label
+        return mr_rtd_fusion, clinic_data, label
 
     def __iter__(self):
         for i in range(self.__len__()):
             yield self.__getitem__(i)
 
-class ClassifierDataset(Dataset):
+class ClassifierDatasetWDT(Dataset):
     def __init__(self, p_augmentation=.3, augmentation_techniques=['shear', 'gaussian_noise', 'flip', 'rotate', 'brightness']):
         super().__init__()
         self.p_augmentation = p_augmentation
@@ -53,8 +52,10 @@ class ClassifierDataset(Dataset):
             
         with open(os.path.join(self.DATA_PATH, 'val_set.pkl'), 'rb') as f:
             val = pickle.load(f)
+            
+        
 
         return train, test, val
     
     def create_splits(self):
-        return ClassifierDatasetSplit(self.train, 'train', p_augmentation=self.p_augmentation, augmentation_techniques=self.augmentation_techniques), ClassifierDatasetSplit(self.val, 'val'), ClassifierDatasetSplit(self.test, 'test')
+        return ClassifierDatasetSplitWDT(self.train, 'train', p_augmentation=self.p_augmentation, augmentation_techniques=self.augmentation_techniques), ClassifierDatasetSplitWDT(self.test, 'test'), ClassifierDatasetSplitWDT(self.val, 'val')

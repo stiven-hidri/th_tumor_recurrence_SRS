@@ -11,7 +11,7 @@ device = None
 def generate_resnet34_3d(cuda=True, pretrain_path=os.path.join(os.path.dirname(__file__), 'saved_models', 'resnet_34_23dataset.pth')):
     
     model = ResNet34_3d(shortcut_type='A', no_cuda=not cuda)
-
+    
     net_dict = model.state_dict()
     
     pretrain = torch.load(pretrain_path, map_location=device)
@@ -22,27 +22,22 @@ def generate_resnet34_3d(cuda=True, pretrain_path=os.path.join(os.path.dirname(_
     
     for param in model.conv1.parameters():
         param.requires_grad = False
-    for param in model.layer1.parameters():
-        param.requires_grad = False
-    
     
     model.fc = nn.Identity()
     
     return model
             
-class ConvRNN(nn.Module):
-    def __init__(self, rnn_type='rnn', hidden_size=128, num_layers = 1, dropout = .1, use_clinical_data=True, out_dim_backbone=512):
-        super(ConvRNN, self).__init__()
+class ModelWDT(nn.Module):
+    def __init__(self, dropout = .1, use_clinical_data=True, out_dim_backbone=512, hidden_size_cd=10, hidden_size_fc1 = 256, hidden_size_fc2 = 256):
+        super(ModelWDT, self).__init__()
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.use_clinical_data = use_clinical_data
         
-        input_dim_rnn = out_dim_backbone + 10 if self.use_clinical_data else out_dim_backbone
+        input_dim = out_dim_backbone + hidden_size_cd if self.use_clinical_data else out_dim_backbone
 
         self.backbone = generate_resnet34_3d()
-        
-        self.hidden_size = hidden_size
         
         if self.use_clinical_data:
             self.cd_backbone = MlpCD()
@@ -55,30 +50,28 @@ class ConvRNN(nn.Module):
             for param in self.cd_backbone.parameters():
                 param.requires_grad = False
 
-        if rnn_type == 'rnn':
-            self.rnn = RNNModel(input_dim_rnn, hidden_dim=hidden_size, layer_dim=num_layers, dropout_prob=dropout)
-        elif rnn_type == 'gru':
-            self.rnn = GRUModel(input_dim_rnn, hidden_dim=hidden_size, layer_dim=num_layers, dropout_prob=dropout)
-            
-        self.layer_norm = nn.LayerNorm(hidden_size)
-            
-        self.final_fc = nn.Linear(hidden_size, 1)
-    
-    def forward(self, mr, rtd, clinical_data = None):
-        mr, rtd = mr.unsqueeze(1), rtd.unsqueeze(1)
+
+        self.dropout = nn.Dropout(p=dropout)  # Dropout with 50% probability
+        self.relu = nn.ReLU()
         
-        feat_mr = self.backbone(mr)
-        feat_rtd = self.backbone(rtd)
+        self.final_fc1 = nn.Linear(input_dim, hidden_size_fc1)
+        self.bn1 = nn.BatchNorm1d(hidden_size_fc1)
+        
+        # self.final_fc2 = nn.Linear(hidden_size_fc1, hidden_size_fc2)
+        # self.bn2 = nn.BatchNorm1d(hidden_size_fc2)        
+        
+        self.final_fc_final = nn.Linear(hidden_size_fc1, 1)
+        
+    
+    def forward(self, mr_rtd_fusion, clinical_data):
+        mr_rtd_fusion = mr_rtd_fusion.unsqueeze(1)
+        
+        feat = self.backbone(mr_rtd_fusion)
         
         if self.use_clinical_data:
-            features_clinical_data = self.cd_backbone(clinical_data)
-            feat_mr = torch.cat((feat_mr, features_clinical_data), dim=-1)
-            feat_rtd = torch.cat((feat_rtd, features_clinical_data), dim=-1)
-
-        feats = torch.stack([feat_mr, feat_rtd], dim=1)
+            feat = torch.cat([feat, self.cd_backbone(clinical_data)], dim=1)
         
-        out = self.layer_norm(self.rnn(feats))
-        
-        out = self.final_fc(out[:, -1, :])
+        out = self.dropout(self.relu(self.bn1(self.final_fc1(feat))))
+        out = self.final_fc_final(out)
 
         return out

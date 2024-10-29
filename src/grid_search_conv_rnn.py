@@ -15,15 +15,15 @@ import os
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 param_grid = {
-    'learning_rate': [1e-5],
-    'batch_size': [1,2,4, 8],
-    'dropout': [0.1],
-    'weight_decay': [1e-3],
-    'gamma_fl': [2, 3],
-    'rnn_type': ['rnn'],
-    'hidden_size': [32, 64, 128, 256],
+    'learning_rate': [ 1e-4 ],
+    'batch_size': [ 2, 4, 8 ],
+    'dropout': [ .3 ],
+    'weight_decay': [ 1e-4 ],
+    'gamma_fl': [ 2, 3],
+    'rnn_type': [ 'gru' ],
+    'hidden_size': [ 128, 256 ],
     'num_layers': [1],
-    'use_clinical_data': [ True]   
+    'use_clinical_data': [False, True]   
 }
 
 if __name__ == '__main__':
@@ -86,7 +86,7 @@ if __name__ == '__main__':
             mode=config.checkpoint.mode
         )
         
-        early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=5, verbose=False, mode="min")
+        early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=8, verbose=False, mode="min")
 
         #Trainer
         trainer = Trainer(
@@ -96,6 +96,8 @@ if __name__ == '__main__':
             default_root_dir=config.logger.log_dir,
             max_epochs=config.model.epochs,
             check_val_every_n_epoch=1,
+            gradient_clip_val=.5,
+            accumulate_grad_batches=2,
             callbacks=[checkpoint_cb, early_stop_callback],
             log_every_n_steps=1,
             num_sanity_val_steps=0,
@@ -135,7 +137,7 @@ if __name__ == '__main__':
             
             module = ClassificationModule.load_from_checkpoint(name=config.model.name, checkpoint_path=path_to_best_checkpoint)
         
-        results = trainer.test(model=module, dataloaders=test_dataloader, verbose=False)
+        results = trainer.test(model=module, dataloaders=test_dataloader, verbose=True)
         
         result_dict = {
             'version': version,
@@ -158,6 +160,6 @@ if __name__ == '__main__':
     # Convert the results list to a pandas DataFrame
     df_results = pd.DataFrame(results_list)
 
-    df_results.to_csv(os.path.join(os.path.dirname(__file__), 'results_csv', f"gridsearch_fl_convrnn_3.csv"), index=False)
+    df_results.to_csv(os.path.join(os.path.dirname(__file__), 'results_csv', f"{config.logger.experiment_name}.csv"), index=False)
     
     print("\nDone!\n")
