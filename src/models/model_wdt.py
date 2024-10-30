@@ -12,23 +12,23 @@ def generate_resnet34_3d(cuda=True, pretrain_path=os.path.join(os.path.dirname(_
     
     model = ResNet34_3d(shortcut_type='A', no_cuda=not cuda)
     
-    net_dict = model.state_dict()
+    # net_dict = model.state_dict()
     
-    pretrain = torch.load(pretrain_path, map_location=device)
-    pretrain_dict = {k: v for k, v in pretrain['state_dict'].items() if k in net_dict.keys()}
+    # pretrain = torch.load(pretrain_path, map_location=device)
+    # pretrain_dict = {k: v for k, v in pretrain['state_dict'].items() if k in net_dict.keys()}
         
-    net_dict.update(pretrain_dict)
-    model.load_state_dict(net_dict)
+    # net_dict.update(pretrain_dict)
+    # model.load_state_dict(net_dict)
     
-    for param in model.conv1.parameters():
-        param.requires_grad = False
+    # for param in model.conv1.parameters():
+    #     param.requires_grad = False
     
     model.fc = nn.Identity()
     
     return model
             
 class ModelWDT(nn.Module):
-    def __init__(self, dropout = .1, use_clinical_data=True, out_dim_backbone=512, hidden_size_cd=10, hidden_size_fc1 = 256, hidden_size_fc2 = 256):
+    def __init__(self, dropout = .1, use_clinical_data=True, out_dim_backbone=512, hidden_size_cd=10, hidden_size_fc1 = 256, hidden_size_fc = 256):
         super(ModelWDT, self).__init__()
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -55,12 +55,12 @@ class ModelWDT(nn.Module):
         self.relu = nn.ReLU()
         
         self.final_fc1 = nn.Linear(input_dim, hidden_size_fc1)
-        self.bn1 = nn.BatchNorm1d(hidden_size_fc1)
+        self.bn1 = nn.BatchNorm1d(hidden_size_fc)
         
-        # self.final_fc2 = nn.Linear(hidden_size_fc1, hidden_size_fc2)
-        # self.bn2 = nn.BatchNorm1d(hidden_size_fc2)        
+        # self.final_fc2 = nn.Linear(hidden_size_fc1, hidden_size_fc)
+        # self.bn2 = nn.BatchNorm1d(hidden_size_fc)        
         
-        self.final_fc_final = nn.Linear(hidden_size_fc1, 1)
+        self.final_fc_final = nn.Linear(hidden_size_fc, 1)
         
     
     def forward(self, mr_rtd_fusion, clinical_data):
@@ -72,6 +72,7 @@ class ModelWDT(nn.Module):
             feat = torch.cat([feat, self.cd_backbone(clinical_data)], dim=1)
         
         out = self.dropout(self.relu(self.bn1(self.final_fc1(feat))))
+        # out = self.relu(self.bn2(self.final_fc2(out)))
         out = self.final_fc_final(out)
 
         return out

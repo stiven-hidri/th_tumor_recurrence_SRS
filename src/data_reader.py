@@ -37,7 +37,7 @@ class RawData_Reader():
         # 0 = mets_diagnosis, 1 = primary_diagnosis, 2 = age, 3 = gender, 4 = roi, 5 = fractions, 6 = longest_diameter, 7 = number_of_lesions
         self.CLINIC_FEATURES_TO_DISCRETIZE = [0, 1, 3, 4]
         self.CLINIC_FEATURES_TO_NORMALIZE = [2, 5, 6, 7]
-        self.CLINIC_FEATURES_TO_KEEP = [1, 4, 6, 7]
+        self.CLINIC_FEATURES_TO_KEEP = [0, 1, 2, 3, 4, 6, 7]
         
         self.split_info = None
         
@@ -57,9 +57,9 @@ class RawData_Reader():
         
         self.__generate_split__()
         self.__normalize_splits__()
-        self.__wdt_fusion__()
         self.__one_hot__()
-        # self.__augment_train_set__()
+        self.__augment_train_set__()
+        self.__wdt_fusion__()
         self.__save__(raw=False)
         
         self.__print_statistics__()
@@ -140,7 +140,7 @@ class RawData_Reader():
         
         self.__wdt_fusion__()
         self.__one_hot__()
-        # self.__augment_train_set__()
+        self.__augment_train_set__()
         self.__print_statistics__()
         
         self.__save__(raw=False)
@@ -268,10 +268,6 @@ class RawData_Reader():
         
         for roi in rois:
             clinic_data_row = self.clinic_data.loc[(self.clinic_data['subject_id']==subject_id)&(self.clinic_data['course']==course)&(self.clinic_data['roi']==roi), ['mets_diagnosis', 'primary_diagnosis', 'age', 'gender', 'roi', 'fractions']].values[0]
-            clinic_data_row[0] = clinic_data_row[0]
-            clinic_data_row[1] = clinic_data_row[1]
-            clinic_data_row[3] = clinic_data_row[3]
-            clinic_data_row[4] = clinic_data_row[4]
             clinic_data_row = np.append(clinic_data_row, longest_diameters[roi])
             clinic_data_row = np.append(clinic_data_row, self.clinic_data.groupby(['subject_id', 'course']).size().get((subject_id, course), 0))
             to_return.append(clinic_data_row)

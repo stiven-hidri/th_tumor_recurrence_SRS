@@ -74,12 +74,14 @@ class ConvLongLSTM(nn.Module):
         slices = []
         
         slices_x = torch.stack((mr.permute(2, 0, 1, 3), rtd.permute(2, 0, 1, 3)), dim=2)
-        slices_y = torch.stack((mr.permute(3, 0, 2, 1), rtd.permute(3, 0, 2, 1)), dim=2)
-        slices_z = torch.stack((mr.permute(1, 0, 3, 2), rtd.permute(1, 0, 3, 2)), dim=2)
+        # slices_y = torch.stack((mr.permute(3, 0, 2, 1), rtd.permute(3, 0, 2, 1)), dim=2)
+        # slices_z = torch.stack((mr.permute(1, 0, 3, 2), rtd.permute(1, 0, 3, 2)), dim=2)
 
         # Concatenate all slices along a new dimension (the slice dimension)
-        slices = torch.cat((slices_x, slices_y, slices_z), dim=0)
-    
+        # slices = torch.cat((slices_x, slices_y, slices_z), dim=0)
+
+        slices = slices_x
+        
         # Reshape to have channels in the correct order
         slices = slices.permute(1, 0, 2, 3, 4)  # Shape: [batch_size, num_slices, 2, H, W]
         
