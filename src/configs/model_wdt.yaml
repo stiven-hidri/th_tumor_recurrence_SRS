@@ -15,7 +15,7 @@ model:
   only_test: False
   lf: fl          #wbce, bce, fl
   use_clinical_data: True
-  alpha_fl: .923
+  alpha_fl: .75
   gamma_fl: 3
   pos_weight: .8
   augmentation_techniques: ['random_affine', 'shear', 'random_rotate', 'random_flip']

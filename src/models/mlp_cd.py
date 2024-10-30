@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class MlpCD(nn.Module):
-    def __init__(self, dropout=.1, input_size=36, hidden_size1=18, hidden_size2=10):
+    def __init__(self, dropout=.1, input_size=47, hidden_size1=18, hidden_size2=10):
         super(MlpCD, self).__init__()
 
         self.fc1 = nn.Linear(input_size, hidden_size1)  # First hidden layer

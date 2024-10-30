@@ -13,15 +13,19 @@ from modules import ClassificationModule
 import yaml
 import os
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+import torch
+
+torch.set_num_threads(8)
+torch.cuda.set_per_process_memory_fraction(fraction=.33, device=None)
 
 param_grid = {
-    'learning_rate': [ .8e-3 ],
+    'learning_rate': [ 0.5e-3 ],
     'batch_size': [ 32 ],
-    'dropout': [ .1, .3, .5 ],
+    'dropout': [ .1, .3 ],
     'weight_decay': [ 1e-3, 1e-4 ],
-    'p_augmentation': [ .3, .5, .7],
-    'gamma_fl': [ 2, 3],
-    'use_clinical_data': [True]   
+    'p_augmentation': [ .3, .5, .7] ,
+    'gamma_fl': [ 2, 3 ],
+    'use_clinical_data': [False, True]   
 }
 
 if __name__ == '__main__':
@@ -84,7 +88,7 @@ if __name__ == '__main__':
             mode=config.checkpoint.mode
         )
         
-        early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=5, verbose=True, mode="min")
+        early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=3, verbose=True, mode="min")
 
         #Trainer
         trainer = Trainer(
@@ -155,6 +159,6 @@ if __name__ == '__main__':
     # Convert the results list to a pandas DataFrame
     df_results = pd.DataFrame(results_list)
 
-    df_results.to_csv(os.path.join(os.path.dirname(__file__), 'results_csv', f"{config.logger.experiment_name}.csv"), index=False)
+    df_results.to_excel(os.path.join(os.path.dirname(__file__), 'results_csv', f"{config.logger.experiment_name}.xlsx"), index=False)
     
     print("\nDone!\n")

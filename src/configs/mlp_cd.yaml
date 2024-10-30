@@ -2,10 +2,10 @@ dataset:
   name: name
 model:
   name: mlp_cd
-  epochs: 100
+  epochs: 150
   batch_size: 32
   optimizer: adam
-  scheduler: cosine
+  scheduler: plateau
   rnn_type: None
   hidden_size: 0
   num_layers: 1
@@ -15,11 +15,11 @@ model:
   only_test: False
   use_clinical_data: True
   lf: fl          #wbce, bce, fl
-  alpha_fl: .92
+  alpha_fl: .75
   gamma_fl: 2
   pos_weight: .8
   augmentation_techniques: ['shear',  'gaussian_noise', 'brightness']
-  p_augmentation: .3
+  p_augmentation: .0
   p_augmentation_per_technique: .3
 logger:
   log_dir: ./log

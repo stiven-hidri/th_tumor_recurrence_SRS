@@ -191,7 +191,9 @@ def combine_aug(mr, rtd=None, p_augmentation=.3, augmentations_techinques=['shea
         'random_flip':random_flip
     }
     
-    augmentations_techinques = random.choices([random.choice(['random_rotate','random_flip']), random.choice(['shear','random_affine'])] , k=random.randint(1, 2))
+    # augmentations_techinques = random.choices([random.choice(['random_rotate','random_flip']), random.choice(['shear','random_affine'])] , k=random.randint(1, 2))
+    
+    augmentations_techinques = random.choices(['random_rotate', random.choice(['shear','random_affine'])] , k=random.randint(1, 2))
         
     if random.random() <= p_augmentation:
         augmentations = [augmentations[a] for a in augmentations_techinques if a in list(augmentations.keys())]

@@ -16,10 +16,10 @@ torch.set_num_threads(8)
 torch.cuda.set_per_process_memory_fraction(fraction=.33, device=None)
 
 param_grid = {
-    'learning_rate': [1e-2, 1e-3, 1e-4],
-    'batch_size': [8, 16, 32, 64],
-    'dropout': [.0, 0.1, .3],
-    'weight_decay': [1e-4, 1e-3, 1e-2],
+    'learning_rate': [1e-2, 1e-3],
+    'batch_size': [16, 32, 64],
+    'dropout': [.3, .5],
+    'weight_decay': [1e-4, 1e-3],
     'gamma_fl': [2, 3]
 }
 
@@ -84,7 +84,7 @@ if __name__ == '__main__':
             mode=config.checkpoint.mode
         )
         
-        early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=20, verbose=False, mode="min")
+        early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=5, verbose=False, mode="min")
 
         #Trainer
         trainer = Trainer(
@@ -136,6 +136,7 @@ if __name__ == '__main__':
         results = trainer.test(model=module, dataloaders=test_dataloader, verbose=False)
         
         result_dict = {
+            'version': version,
             'learning_rate': lr,
             'batch_size': batch_size,
             'dropout': dropout,
@@ -149,8 +150,5 @@ if __name__ == '__main__':
 
     # Convert the results list to a pandas DataFrame
     df_results = pd.DataFrame(results_list)
-
-    df_results.to_csv(os.path.join(os.path.dirname(__file__), 'results_csv', f"gridsearch_fl_mlcpcd.csv"), index=False)
-
-    best_results = df_results.sort_values(by=['f1_Precision', 'j_Precision', 'roc_Precision'], ascending=False)
-    print("Top performing configurations:\n", best_results.head())
+    
+    df_results.to_excel(os.path.join(os.path.dirname(__file__), 'results_csv', f"{config.logger.experiment_name}.xlsx"), index=False)
