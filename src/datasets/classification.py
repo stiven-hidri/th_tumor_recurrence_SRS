@@ -8,6 +8,8 @@ from sklearn.model_selection import StratifiedGroupKFold
 import numpy as np
 import torch
 from sklearn import preprocessing
+import torch.nn.functional as F
+
 class ClassifierDatasetSplit(Dataset):
     def __init__(self, model_name:str, data:dict, split_name:str, p_augmentation:float, augmentation_techniques:list):
         self.data = data
@@ -15,9 +17,6 @@ class ClassifierDatasetSplit(Dataset):
         self.split_name = split_name
         self.p_augmentation = p_augmentation
         self.augmentation_techniques = augmentation_techniques
-        self.DATA_PATH = os.path.join(os.path.dirname(__file__), '..','..', 'data', 'processed')
-        with open(os.path.join(self.DATA_PATH, f'statistics.pkl'), 'rb') as f:
-            self.statistics = pickle.load(f)
 
     def __len__(self):
         return len(self.data['label'])
@@ -28,14 +27,19 @@ class ClassifierDatasetSplit(Dataset):
         
         if 'wdt' in self.model_name:
             mr_rtd_fusion = self.data['mr_rtd_fusion'][idx]
+            
+            if self.split_name == 'train':
+                mr_rtd_fusion, _ = combine_aug(mr_rtd_fusion, None, p_augmentation=self.p_augmentation, augmentations_techinques=self.augmentation_techniques)
+                
+            return None, None, mr_rtd_fusion, clinic_data, label
         else:
             mr = self.data['mr'][idx]
             rtd = self.data['rtd'][idx]
-        
-        if self.split_name == 'train':
-            mr, rtd = combine_aug(mr, rtd, p_augmentation=self.p_augmentation, augmentations_techinques=self.augmentation_techniques)
-        
-        return mr, rtd, clinic_data, label
+            
+            if self.split_name == 'train':
+                mr, rtd = combine_aug(mr, rtd, p_augmentation=self.p_augmentation, augmentations_techinques=self.augmentation_techniques)
+                
+            return mr, rtd, None, clinic_data, label
 
     def __iter__(self):
         for i in range(self.__len__()):
@@ -75,10 +79,49 @@ class ClassifierDataset(Dataset):
         fused_image_e = pywt.idwtn(fused_details_e, 'db1', axes=(0, 1, 2))
         fused_image_e = torch.Tensor(fused_image_e) * ( mr > 0 )
         return fused_image_e
+
+    def __augment_by_flipping__(self, split):
+        print('Augmenting data...', end='\r')
+        i = 0
+        total_len = len(split['mr'])
+        while i < total_len:
+            if int(split['label'][i]) == 1:
+                mr, rtd = split['mr'][i], split['rtd'][i]
+                
+                # flip
+                augmented_mr = [torch.flip(mr, dims=[0]), torch.flip(mr, dims=[1]), torch.flip(mr, dims=[2])]
+                augmented_rtd = [torch.flip(rtd, dims=[0]), torch.flip(rtd, dims=[1]), torch.flip(rtd, dims=[2])]
+
+                augmented_label = [split['label'][i]] * len(augmented_mr)
+                augmented_clinic_data = [split['clinic_data'][i]] * len(augmented_mr)
+                
+                split['mr'].extend(augmented_mr)
+                split['rtd'].extend(augmented_rtd)
+                split['clinic_data'].extend(augmented_clinic_data)
+                split['label'] = torch.cat((split['label'], torch.tensor(augmented_label).to(torch.float32).view(-1, 1)), dim=0)
+                
+            i+=1
+            
+        return split
         
-    # self.__normalize_splits__()
-    # self.__one_hot__()
-    # self.__augment_train_set__()
+    def __one_hot__(self, split):        
+        max_values = {}
+        for tensor in split['clinic_data']:
+            for j, feature in enumerate(tensor):
+                if j in self.CLINIC_FEATURES_TO_DISCRETIZE:
+                    if j not in max_values:
+                        max_values[j] = int(feature)
+                    else:
+                        max_values[j] = max(max_values[j], int(feature))
+    
+        for i_tensor in range(len(split['clinic_data'])):
+            new_tensor = [split['clinic_data'][i_tensor][j] for j in self.CLINIC_FEATURES_TO_NORMALIZE if j in self.CLINIC_FEATURES_TO_KEEP]                
+            for j in self.CLINIC_FEATURES_TO_DISCRETIZE:
+                if j in self.CLINIC_FEATURES_TO_KEEP:
+                    new_tensor.append(F.one_hot(split['clinic_data'][i_tensor][j].long(), num_classes=max_values[j]+1).float()[0])
+            split['clinic_data'][i_tensor] = torch.cat(new_tensor)
+            
+        return split
     
     def __discretize_categorical_features__(self, global_data):
         global_data['label'] = np.array([1 if label == 'recurrence' else 0 for label in global_data['label']])
@@ -202,7 +245,6 @@ class ClassifierDataset(Dataset):
 
         return averaged_statistics
 
-
     def __load__(self) -> None:
         with open(os.path.join(self.DATA_PATH, 'global_data.pkl'), 'rb') as f:
             global_data = pickle.load(f)
@@ -266,6 +308,11 @@ class ClassifierDataset(Dataset):
             train_set = self.__normalize__(train_set, statistics, f=self.__minmax_scaling__)
             val_set = self.__normalize__(val_set, statistics, f=self.__minmax_scaling__)
             
+            train_set = self.__one_hot__(train_set)
+            val_set = self.__one_hot__(val_set)
+            
+            train_set = self.__augment_by_flipping__(train_set)
+            
             train_set = ClassifierDatasetSplit(model_name=self.model_name, data=train_set, split_name='train', p_augmentation=self.p_augmentation, augmentation_techniques=self.augmentation_techniques)
             val_set = ClassifierDatasetSplit(model_name=self.model_name, data=val_set, split_name="val" if self.keep_test else "test")
             
@@ -276,6 +323,7 @@ class ClassifierDataset(Dataset):
             averaged_statistics = self.__average_statistics__(all_statistics)
             test_set = self.__normalize__(test_set, averaged_statistics, f=self.__minmax_scaling__)
             test_set = ClassifierDatasetSplit(model_name=self.model_name, data=test_set, split_name="test")
+            test_set = self.__one_hot__(test_set)
             
         return list_train, list_val, test_set
     
