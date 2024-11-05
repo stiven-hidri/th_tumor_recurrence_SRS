@@ -1,7 +1,7 @@
 import os
 import pickle
 from matplotlib import pyplot as plt
-from sklearn.metrics import confusion_matrix, roc_curve
+from sklearn.metrics import auc, confusion_matrix, roc_curve
 import torch
 import numpy as np
 from lightning.pytorch import LightningModule

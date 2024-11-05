@@ -54,10 +54,8 @@ class RawData_Reader():
         
         if cleanOutDir:
             self.__clean_output_directory__(self.OUTPUT_PROCESSED_DATA_FOLDER_PATH)
-            
-        self.__split_subjects__()
         
-        # metadata_by_subjectid = self.rawdata_meta[(self.rawdata_meta['subject_id'] == 'GK_114')].groupby(['subject_id'])
+        #vmetadata_by_subjectid = self.rawdata_meta[(self.rawdata_meta['subject_id'] == 'GK_114')].groupby(['subject_id'])
         metadata_by_subjectid = self.rawdata_meta.groupby(['subject_id'])
         total_subjects = len(metadata_by_subjectid)
         
