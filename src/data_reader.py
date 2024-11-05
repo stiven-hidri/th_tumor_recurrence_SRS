@@ -59,12 +59,42 @@ class RawData_Reader():
         self.__normalize_splits__()
         self.__one_hot__()
         self.__augment_train_set__()
+        self.__pad_resize_images__()
         self.__wdt_fusion__()
         self.__save__(raw=False)
         
         self.__print_statistics__()
         
         print('Done!', end='\r')
+        
+    def __pad_resize__(self, image, desired_shape):        
+        cropped_shape = np.array(image.shape)
+
+        factor = np.min(np.divide(desired_shape,cropped_shape))
+        
+        if factor < 1:
+            image = zoom(image, (factor,factor,factor), order=1)
+        
+        cropped_shape = np.array(image.shape)
+        
+        pad_before = np.maximum((desired_shape - cropped_shape) // 2, 0)
+        pad_after = np.maximum(desired_shape - cropped_shape - pad_before, 0)
+        
+        image = np.pad(image, (
+            (pad_before[0], pad_after[0]), 
+            (pad_before[1], pad_after[1]), 
+            (pad_before[2], pad_after[2])
+        ), mode='constant', constant_values=0)
+        
+        return image
+        
+    def __pad_resize_images__(self, desired_shape = (90, 90, 90)):
+        for i_split, split in enumerate(self.ALL_SPLITS):
+            for i_tensor in range(len(split['mr'])):
+                mr = self.__pad_resize__(split['mr'][i_tensor], desired_shape)
+                rtd = self.__pad_resize__(split['rtd'][i_tensor], desired_shape)
+                self.ALL_SPLITS[i_split]['mr'][i_tensor] = torch.Tensor(mr).to(torch.float32)
+                self.ALL_SPLITS[i_split]['rtd'][i_tensor] = torch.Tensor(rtd).to(torch.float32)
 
     def __wdt_fusion__(self):
         for i_split, split in enumerate(self.ALL_SPLITS):
@@ -138,9 +168,10 @@ class RawData_Reader():
         self.__generate_split__()
         self.__normalize_splits__()
         
-        self.__wdt_fusion__()
         self.__one_hot__()
         self.__augment_train_set__()
+        self.__pad_resize_images__()
+        self.__wdt_fusion__()
         self.__print_statistics__()
         
         self.__save__(raw=False)
@@ -149,7 +180,7 @@ class RawData_Reader():
         
     def __load__(self):
         print('Loading data...', end='\r')
-        with open(os.path.join(self.OUTPUT_RAW_DATA_FOLDER_PATH, 'global_data.pkl'), 'rb') as f:
+        with open(os.path.join(self.OUTPUT_RAW_DATA_FOLDER_PATH, 'global_data90.pkl'), 'rb') as f:
             self.global_data = pickle.load(f)
     
     def __adjust_dataframes__(self):
@@ -289,31 +320,13 @@ class RawData_Reader():
         
         return mr_return, rtd_return
     
-    def __crop_les__(self, image, desired_shape = (40, 40, 40)):
+    def __crop_les__(self, image):
         true_points = np.argwhere(image)
         top_left = true_points.min(axis=0)
         bottom_right = true_points.max(axis=0)
         cropped_arr = image[top_left[0]:bottom_right[0]+1, top_left[1]:bottom_right[1]+1, top_left[2]:bottom_right[2]+1]
-
-        cropped_shape = np.array(cropped_arr.shape)
         
-        factor = np.min(np.divide(desired_shape,cropped_shape))
-        
-        if factor < 1:
-            cropped_arr = zoom(cropped_arr, (factor,factor,factor), order=1)
-        
-        cropped_shape = np.array(cropped_arr.shape)
-        
-        pad_before = np.maximum((desired_shape - cropped_shape) // 2, 0)
-        pad_after = np.maximum(desired_shape - cropped_shape - pad_before, 0)
-        
-        padded_arr = np.pad(cropped_arr, (
-            (pad_before[0], pad_after[0]), 
-            (pad_before[1], pad_after[1]), 
-            (pad_before[2], pad_after[2])
-        ), mode='constant', constant_values=0)
-        
-        return padded_arr
+        return cropped_arr
 
     def __append_data__(self, subject_id, mrs, rtds, clinic_data, labels):
         for i in range(len(labels)):
@@ -494,7 +507,7 @@ class RawData_Reader():
         if raw:
             target = self.OUTPUT_RAW_DATA_FOLDER_PATH
             
-            with open(os.path.join(target, 'global_data.pkl'), 'wb') as f:
+            with open(os.path.join(target, 'global_data90.pkl'), 'wb') as f:
                 pickle.dump(self.global_data, f)
         else: 
             target = self.OUTPUT_PROCESSED_DATA_FOLDER_PATH

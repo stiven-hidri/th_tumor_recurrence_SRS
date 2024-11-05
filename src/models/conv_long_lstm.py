@@ -11,12 +11,7 @@ class BackboneCNN(nn.Module):
         
         super(BackboneCNN, self).__init__()
     
-        self.backbone = models.resnet34(pretrained=True)
-        
-        for param in self.backbone.conv1.parameters():
-            param.requires_grad = False
-        for param in self.backbone.layer1.parameters():
-            param.requires_grad = False
+        self.backbone = models.resnet34()
         
         self.backbone.conv1 = nn.Conv2d(
             in_channels=2,out_channels=self.backbone.conv1.out_channels,
@@ -25,15 +20,6 @@ class BackboneCNN(nn.Module):
             padding=self.backbone.conv1.padding,
             bias=self.backbone.conv1.bias
         )
-        
-        with torch.no_grad():
-            original_weights = self.backbone.conv1.weight
-            self.backbone.conv1.weight[:, :2, :, :] = original_weights[:, :2, :, :]
-            
-        for param in self.backbone.conv1.parameters():
-            param.requires_grad = False
-        for param in self.backbone.layer1.parameters():
-            param.requires_grad = False
         
         in_fatures = self.backbone.fc.in_features
         
@@ -63,7 +49,9 @@ class ConvLongLSTM(nn.Module):
             self.cd_backbone.load_state_dict(checkpoint['state_dict'])
             self.cd_backbone.final_fc = nn.Identity()
             
-            for param in self.cd_backbone.parameters():
+            for param in self.cd_backbone.fc1.parameters():
+                param.requires_grad = False
+            for param in self.cd_backbone.fc2.parameters():
                 param.requires_grad = False
 
         self.layer_norm = nn.LayerNorm(hidden_size)
