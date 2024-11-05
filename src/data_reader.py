@@ -53,16 +53,14 @@ class RawData_Reader():
         self.__clean_output_directory__(dr.OUTPUT_PROCESSED_DATA_FOLDER_PATH)
         self.__load__()
         self.__preprocess_clinic_data__()
-        self.__discretize_categorical_features__()
         
-        self.__generate_split__()
-        self.__normalize_splits__()
-        self.__one_hot__()
-        self.__augment_train_set__()
-        self.__wdt_fusion__()
+        # self.__discretize_categorical_features__()
+        # self.__normalize_splits__()
+        # self.__one_hot__()
+        # self.__augment_train_set__()
+        # self.__wdt_fusion__()
+        
         self.__save__(raw=False)
-        
-        self.__print_statistics__()
         
         print('Done!', end='\r')
 
@@ -499,20 +497,11 @@ class RawData_Reader():
         else: 
             target = self.OUTPUT_PROCESSED_DATA_FOLDER_PATH
         
-            with open(os.path.join(target, 'train_set.pkl'), 'wb') as f:
-                pickle.dump(self.train_set, f)
-            
-            with open(os.path.join(target, 'test_set.pkl'), 'wb') as f:
-                pickle.dump(self.test_set, f) 
-                
-            with open(os.path.join(target, 'val_set.pkl'), 'wb') as f:
-                pickle.dump(self.val_set, f) 
+            with open(os.path.join(target, 'global_data.pkl'), 'wb') as f:
+                pickle.dump(self.global_data, f)
             
     def __split_subjects__(self):
         subjects_test   =   [ 427, 243, 257, 224, 420, 312, 316, 199, 219, 492, 332, 364, 132 ]
-        # old
-        # subjects_train  =   [ 463, 158, 247, 408, 234, 421, 431, 346, 487, 274, 338, 105, 293, 314, 227, 330, 391, 313, 270, 127, 324, 342, 121, 103, 114, 115, 151, 244, 245, 246, 467 ]
-        # subjects_val    =   [ 455, 152, 147]
         
         # new
         subjects_train =      [ 103, 105, 114, 115, 121, 127, 147, 151, 158, 227, 234, 244, 245, 246, 247, 293, 313, 314, 324, 330, 342, 346, 391, 408, 421, 431, 455, 463, 467, 487 ]

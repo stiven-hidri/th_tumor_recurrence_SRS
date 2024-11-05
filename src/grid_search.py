@@ -1,76 +1,85 @@
 from itertools import product
-import pprint
-import random
 import re
 from lightning.pytorch import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
 import pandas as pd
+import torch
 from torch.utils.data import DataLoader
 from utils import Parser
 from datasets import ClassifierDataset
 from modules import ClassificationModule
-import yaml
 import os
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+from sklearn.model_selection import StratifiedGroupKFold
+from params_grid import param_grid_basemodel, param_grid_convlstm, param_grid_mlpcd, param_grid_wdt
 
-param_grid = {
-    'learning_rate': [1e-4],
-    'batch_size': [32],
-    'dropout': [.1, .3],
-    'weight_decay': [1e-4, 1e-3],
-    'gamma_fl': [2, 3],
-    'p_augmentation': [.3, .5, .7],
-    'use_clinical_data': [False, True]
-}
+torch.set_num_threads(8)
+torch.cuda.set_per_process_memory_fraction(fraction=.33, device=None)
 
 if __name__ == '__main__':
     # Get configuration arguments
     results_list = []
     parser = Parser()
-    config, device = parser.parse_args()
+    config, keep_test, device = parser.parse_args()
+    cnt = 0
+    version = int(config.logger.version)
     
-    version = 0
+    if config.model.name == "basemodel":
+        param_grid = param_grid_basemodel
+    elif config.model.name == "convlstm":
+        param_grid = param_grid_convlstm
+    elif config.model.name == "mlpcd":
+        param_grid = param_grid_mlpcd
+    elif config.model.name == "convwdt":
+        param_grid = param_grid_wdt
+    else:
+        raise NotImplementedError("Model not implemented")
     
-    all_param_combinations = list(product(param_grid['learning_rate'], param_grid['batch_size'], param_grid['dropout'], param_grid['weight_decay'], param_grid['gamma_fl'], param_grid['p_augmentation'], param_grid['use_clinical_data']))
+    # Generate all parameter combinations
+    keys, values = zip(*param_grid.items())
+    all_param_combinations = [dict(zip(keys, v)) for v in product(*values)]
+    max_cnt = len(all_param_combinations)
     
-    max_cnt = len(list(all_param_combinations))
-    
-    classifier_dataset = ClassifierDataset()
-    train_split, val_split, test_split = classifier_dataset.create_splits()
-    
-    for i, (lr, batch_size, dropout, weight_decay, gamma_fl, p_augmentation, use_clinical_data) in enumerate(all_param_combinations):
-        print(f"\n*********\n{i+1}/{max_cnt}\n*********\n")
+    for i, param_set in enumerate(all_param_combinations):
+        print(f"**********\n{i+1}\{max_cnt}:\n**********")
+        
+        # Load sources and create datasets
+        classifier_dataset = ClassifierDataset()
+        train_split, val_split, test_split = classifier_dataset.create_splits()
             
-        train_dataloader = DataLoader(train_split, batch_size=batch_size, shuffle=True, num_workers=4, persistent_workers=True)
-        val_dataloader = DataLoader(val_split, batch_size=batch_size, num_workers=4, persistent_workers=True)
-        test_dataloader = DataLoader(test_split, batch_size=batch_size, num_workers=4, persistent_workers=True)
+        train_dataloader = DataLoader(train_split, batch_size=param_grid['batch_size'], shuffle=True, num_workers=4, persistent_workers=True)
+        val_dataloader = DataLoader(val_split, batch_size=param_grid['batch_size'], num_workers=4, persistent_workers=True)
+        test_dataloader = DataLoader(test_split, batch_size=param_grid['batch_size'], num_workers=4, persistent_workers=True)
 
         # Logger for each experiment
         logger = TensorBoardLogger(save_dir=config.logger.log_dir, version=version, name=config.logger.experiment_name)
 
+        del param_grid['batch_size']
+
         # Create the model with the current hyperparameters
         module = ClassificationModule(
-            name=config.model.name,
-            epochs=config.model.epochs,
-            lr=lr,
-            weight_decay=weight_decay,
-            rnn_type=config.model.rnn_type,
-            hidden_size= config.model.hidden_size,
-            num_layers=config.model.num_layers,
-            use_clinical_data=use_clinical_data,
-            alpha_fl=config.model.alpha_fl,
-            gamma_fl=gamma_fl,
-            lf=config.model.lf,
-            dropout=dropout,
-            pos_weight=config.model.pos_weight,
-            optimizer=config.model.optimizer,
-            scheduler=config.model.scheduler,
-            experiment_name=config.logger.experiment_name,
-            version=str(version),
-            augmentation_techniques = config.model.augmentation_techniques,
-            p_augmentation = p_augmentation,
-            p_augmentation_per_technique = config.model.p_augmentation_per_technique
+            name =                          config.model.name,
+            epochs =                        config.model.epochs,
+            lr =                            config.model.lr,
+            weight_decay =                  config.model.weight_decay,
+            rnn_type =                      config.model.rnn_type,
+            hidden_size =                   config.model.hidden_size,
+            num_layers =                    config.model.num_layers,
+            use_clinical_data =             config.model.use_clinical_data,
+            alpha_fl =                      config.model.alpha_fl,
+            gamma_fl =                      config.model.gamma_fl,
+            lf =                            config.model.lf,
+            dropout =                       config.model.dropout,
+            pos_weight =                    config.model.pos_weight,
+            optimizer =                     config.model.optimizer,
+            scheduler =                     config.model.scheduler,
+            experiment_name =               config.logger.experiment_name,
+            version =                       str(version),
+            augmentation_techniques =       config.model.augmentation_techniques,
+            p_augmentation =                config.model.p_augmentation,
+            p_augmentation_per_technique =  config.model.p_augmentation_per_technique,
+            **param_set
         )
 
         # Checkpoint callback
@@ -83,7 +92,7 @@ if __name__ == '__main__':
             mode=config.checkpoint.mode
         )
         
-        early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=3, verbose=True, mode="min")
+        early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=5, verbose=False, mode="min")
 
         #Trainer
         trainer = Trainer(
@@ -102,6 +111,8 @@ if __name__ == '__main__':
         # Train
         if not config.model.only_test:
             trainer.fit(model=module, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
+
+        # Test
 
         if checkpoint_cb.best_model_path:
             module = ClassificationModule.load_from_checkpoint(name=config.model.name, checkpoint_path=checkpoint_cb.best_model_path)
@@ -134,13 +145,7 @@ if __name__ == '__main__':
         
         result_dict = {
             'version': version,
-            'learning_rate': lr,
-            'batch_size': batch_size,
-            'dropout': dropout,
-            'weight_decay': weight_decay,
-            'gamma_fl': gamma_fl,
-            'p_augmentation': p_augmentation,
-            'use_clinical_data': use_clinical_data,
+            **param_set,
             **results[0]  # results[0] is the dictionary returned by the test method
         }
         
@@ -149,7 +154,5 @@ if __name__ == '__main__':
 
     # Convert the results list to a pandas DataFrame
     df_results = pd.DataFrame(results_list)
-
+    
     df_results.to_excel(os.path.join(os.path.dirname(__file__), 'results_csv', f"{config.logger.experiment_name}.xlsx"), index=False)
-
-    print("\nDone!\n")
