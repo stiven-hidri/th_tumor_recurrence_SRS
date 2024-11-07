@@ -1,7 +1,7 @@
 dataset:
   name: name
 model:
-  name: conv_long_lstm
+  name: conv_lstm
   epochs: 150
   batch_size: 2
   optimizer: adam
@@ -9,7 +9,7 @@ model:
   rnn_type: none
   hidden_size: 256
   num_layers: 1
-  learning_rate: 1e-4
+  lr: 1e-4
   weight_decay: 1e-3
   dropout: .3
   only_test: False
@@ -23,7 +23,7 @@ model:
   p_augmentation_per_technique: .4
 logger:
   log_dir: ./log
-  experiment_name: conv_long_lstm_1_cd_gridsearch
+  experiment_name: conv_lstm_1_cd_gridsearch
   version: 0
 checkpoint:
   monitor: val_loss

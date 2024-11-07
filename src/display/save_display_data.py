@@ -18,22 +18,22 @@ class RawData_Reader():
         #paths
         self.RAWDATA_FOLDER_PATH = os.path.join('..','..', 'descriptive')
         self.RAWDATA_META_FILE_PATH = os.path.join(self.RAWDATA_FOLDER_PATH, 'metadata.csv')
-        self.CLINIC_DATA_FILE_PATH = os.path.join('..','..', 'Brain-TR-GammaKnife-Clinical-Information.xlsx')
+        self.CLINICAL_DATA_FILE_PATH = os.path.join('..','..', 'Brain-TR-GammaKnife-Clinical-Information.xlsx')
         self.OUTPUT_DATA_FOLDER_PATH = os.path.join('..','..', 'data')
 
         #adjusting metadata and clinical data dataframes
         self.rawdata_meta = pd.read_csv(self.RAWDATA_META_FILE_PATH)
-        self.clinic_data_ll = pd.read_excel(self.CLINIC_DATA_FILE_PATH, sheet_name='lesion_level')
-        self.clinic_data_cl = pd.read_excel(self.CLINIC_DATA_FILE_PATH, sheet_name='course_level')
+        self.clinical_data_ll = pd.read_excel(self.CLINICAL_DATA_FILE_PATH, sheet_name='lesion_level')
+        self.clinical_data_cl = pd.read_excel(self.CLINICAL_DATA_FILE_PATH, sheet_name='course_level')
         
-        self.clinic_data = None
+        self.clinical_data = None
 
         self.split_info = None
         
-        self.global_data = {'mr': [], 'rtd': [], 'clinic_data': [], 'label': [], 'subject_id': []}
+        self.global_data = {'mr': [], 'rtd': [], 'clinical_data': [], 'label': [], 'subject_id': []}
         #final outputs 
-        self.train_set = {'mr': [], 'rtd': [], 'clinic_data': [], 'label': []}
-        self.test_set = {'mr': [], 'rtd': [], 'clinic_data': [], 'label': []}
+        self.train_set = {'mr': [], 'rtd': [], 'clinical_data': [], 'label': []}
+        self.test_set = {'mr': [], 'rtd': [], 'clinical_data': [], 'label': []}
         
     def main(self, cleanOutDir = True):
         self.__adjust_dataframes__()
@@ -66,7 +66,7 @@ class RawData_Reader():
                 self.__save_lesions__(rois, mr, rtd, subject_id, course, labels)
                 #mr, rtd = self.__normalize__(mr, rtd)
             
-                # clinic_data = self.__get_clinic_data__(rois, subject_id, course)
+                # clinical_data = self.__get_clinical_data__(rois, subject_id, course)
                     
             print(f'\rStep: {cnt+1}/{total_subjects}', end='')
         
@@ -76,22 +76,22 @@ class RawData_Reader():
         
     def __adjust_dataframes__(self):
         rawdata_meta_renaming = {'Study Date':'study_date','Study UID':'study_uid','Subject ID':'subject_id', 'Modality':'modality', 'File Location':'file_path'}
-        clinic_data_ll_renaming = {'unique_pt_id': 'subject_id', 'Treatment Course':'course', 'Lesion Location':'roi', 'mri_type':'label', 'duration_tx_to_imag (months)': 'duration_tx_to_imag', 'Fractions':'fractions'}
-        clinic_data_cl_renaming = {'unique_pt_id': 'subject_id', 'Course #':'course', 'Diagnosis (Only want Mets)':'mets_diagnosis', 'Primary Diagnosis':'primary_diagnosis', 'Age at Diagnosis':'age', 'Gender':'gender'}
+        clinical_data_ll_renaming = {'unique_pt_id': 'subject_id', 'Treatment Course':'course', 'Lesion Location':'roi', 'mri_type':'label', 'duration_tx_to_imag (months)': 'duration_tx_to_imag', 'Fractions':'fractions'}
+        clinical_data_cl_renaming = {'unique_pt_id': 'subject_id', 'Course #':'course', 'Diagnosis (Only want Mets)':'mets_diagnosis', 'Primary Diagnosis':'primary_diagnosis', 'Age at Diagnosis':'age', 'Gender':'gender'}
         
         rawdata_meta_types = {'study_date':"datetime64[ns]" ,'study_uid':'string','subject_id':'string', 'modality':'string', 'file_path':'string'}
-        clinic_data_ll_types = {'subject_id':'int64','course':'Int8', 'roi':'string', 'label':'string', 'duration_tx_to_imag':'int8', 'fractions':'int8'}
-        clinic_data_cl_types = {'subject_id':'int64', 'course':'Int8', 'mets_diagnosis':'string', 'primary_diagnosis':'string', 'age':'int8', 'gender':'string'}
+        clinical_data_ll_types = {'subject_id':'int64','course':'Int8', 'roi':'string', 'label':'string', 'duration_tx_to_imag':'int8', 'fractions':'int8'}
+        clinical_data_cl_types = {'subject_id':'int64', 'course':'Int8', 'mets_diagnosis':'string', 'primary_diagnosis':'string', 'age':'int8', 'gender':'string'}
         
         self.rawdata_meta = self.rawdata_meta.drop(self.rawdata_meta.columns.difference(rawdata_meta_renaming.keys()), axis=1).rename(columns=rawdata_meta_renaming)
-        self.clinic_data_ll = self.clinic_data_ll.drop(self.clinic_data_ll.columns.difference(clinic_data_ll_renaming.keys()), axis=1).rename(columns=clinic_data_ll_renaming)
-        self.clinic_data_cl = self.clinic_data_cl.drop(self.clinic_data_cl.columns.difference(clinic_data_cl_renaming.keys()), axis=1).rename(columns=clinic_data_cl_renaming)
+        self.clinical_data_ll = self.clinical_data_ll.drop(self.clinical_data_ll.columns.difference(clinical_data_ll_renaming.keys()), axis=1).rename(columns=clinical_data_ll_renaming)
+        self.clinical_data_cl = self.clinical_data_cl.drop(self.clinical_data_cl.columns.difference(clinical_data_cl_renaming.keys()), axis=1).rename(columns=clinical_data_cl_renaming)
         
         self.rawdata_meta = self.rawdata_meta.astype(rawdata_meta_types)
-        self.clinic_data_ll = self.clinic_data_ll.astype(clinic_data_ll_types)
-        self.clinic_data_cl = self.clinic_data_cl.astype(clinic_data_cl_types)
+        self.clinical_data_ll = self.clinical_data_ll.astype(clinical_data_ll_types)
+        self.clinical_data_cl = self.clinical_data_cl.astype(clinical_data_cl_types)
         
-        self.clinic_data = pd.merge_ordered(self.clinic_data_ll, self.clinic_data_cl, on=['subject_id', 'course'], how='inner')
+        self.clinical_data = pd.merge_ordered(self.clinical_data_ll, self.clinical_data_cl, on=['subject_id', 'course'], how='inner')
 
     def __clean_output_directory__(self):
         for filename in os.listdir(os.path.join('.', 'lesions_cropped')):
@@ -140,7 +140,7 @@ class RawData_Reader():
     def __get_rts__(self, path_RTS, series_path, subject_id, course):
         rt_struct_path = [os.path.join(path_RTS, f) for f in os.listdir(path_RTS) if f.endswith('.dcm')][0]
         rtstruct = RTStructBuilder.create_from(dicom_series_path=series_path, rt_struct_path=rt_struct_path)
-        rois = self.clinic_data.loc[(self.clinic_data['subject_id'] == subject_id) & (self.clinic_data['course'] == course), 'roi'].values
+        rois = self.clinical_data.loc[(self.clinical_data['subject_id'] == subject_id) & (self.clinical_data['course'] == course), 'roi'].values
         
         couples = couple_roi_names(rois, rtstruct.get_roi_names())
         
@@ -160,18 +160,18 @@ class RawData_Reader():
         to_return = []
         
         for roi in rois:    
-            label = self.clinic_data.loc[(self.clinic_data['subject_id']==subject_id)&(self.clinic_data['course']==course)&(self.clinic_data['roi']==roi), ['label']].values[0][0]
+            label = self.clinical_data.loc[(self.clinical_data['subject_id']==subject_id)&(self.clinical_data['course']==course)&(self.clinical_data['roi']==roi), ['label']].values[0][0]
             to_return.append(label)
             
         return to_return
 
-    def __get_clinic_data__(self, rois, subject_id, course):
+    def __get_clinical_data__(self, rois, subject_id, course):
         to_return = []
         
         for roi in rois:
-            clinic_data_row = self.clinic_data.loc[(self.clinic_data['subject_id']==subject_id)&(self.clinic_data['course']==course)&(self.clinic_data['roi']==roi), ['mets_diagnosis', 'primary_diagnosis', 'age', 'gender', 'duration_tx_to_imag', 'fractions']].values[0]
-            clinic_data_row[0] = re.sub('[^0-9a-zA-Z]+', '_', clinic_data_row[0]).lower()
-            to_return.append(clinic_data_row)
+            clinical_data_row = self.clinical_data.loc[(self.clinical_data['subject_id']==subject_id)&(self.clinical_data['course']==course)&(self.clinical_data['roi']==roi), ['mets_diagnosis', 'primary_diagnosis', 'age', 'gender', 'duration_tx_to_imag', 'fractions']].values[0]
+            clinical_data_row[0] = re.sub('[^0-9a-zA-Z]+', '_', clinical_data_row[0]).lower()
+            to_return.append(clinical_data_row)
             
         return to_return
     
@@ -296,15 +296,15 @@ class RawData_Reader():
         for i in range(len(self.global_data['label'])):
             self.global_data['label'][i] = [1 if x == 'recurrence' else 0 for x in self.global_data['label'][i]]
         
-        tmp = np.array([l for sl in self.global_data['clinic_data'] for l in sl])        
+        tmp = np.array([l for sl in self.global_data['clinical_data'] for l in sl])        
         tmp_enc = [preprocessing.LabelEncoder().fit(tmp[:,j]) for j in[0,1,3] ]
         
-        for i in range(len(self.global_data['clinic_data'])):
-            tmp_cur = np.array(self.global_data['clinic_data'][i])
+        for i in range(len(self.global_data['clinical_data'])):
+            tmp_cur = np.array(self.global_data['clinical_data'][i])
             for n, j in enumerate([0, 1, 3]):
                 tmp_cur[:,j] = tmp_enc[n].transform(tmp_cur[:,j])
 
-            self.global_data['clinic_data'][i] = tmp_cur.tolist()
+            self.global_data['clinical_data'][i] = tmp_cur.tolist()
     
      
 

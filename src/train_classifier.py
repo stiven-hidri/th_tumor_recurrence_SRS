@@ -34,7 +34,7 @@ if __name__ == '__main__':
         module = ClassificationModule(
             name=config.model.name,
             epochs=config.model.epochs,
-            lr=config.model.learning_rate, 
+            lr=config.model.lr, 
             weight_decay = config.model.weight_decay,
             rnn_type=config.model.rnn_type,
             hidden_size =  config.model.hidden_size,
@@ -59,7 +59,7 @@ if __name__ == '__main__':
             checkpoint_path=config.model.pretrained,
             name=config.model.name,
             epochs=config.model.epochs,
-            lr=config.model.learning_rate,
+            lr=config.model.lr,
             rnn_type=config.model.rnn_type,
             hidden_size=config.model.hidden_size,
             num_layers =  config.model.num_layers,

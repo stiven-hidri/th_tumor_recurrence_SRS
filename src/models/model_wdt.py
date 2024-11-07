@@ -41,14 +41,14 @@ class ModelWDT(nn.Module):
         
         if self.use_clinical_data:
             self.cd_backbone = MlpCD()
-            path_to_mlpcd_weights = os.path.join(os.path.dirname(__file__), 'saved_models', 'mlp_cd.ckpt')
-            checkpoint = torch.load(path_to_mlpcd_weights, map_location=device)
-            checkpoint['state_dict'] = {key.replace('model.', ''): value for key, value in checkpoint['state_dict'].items()}
-            self.cd_backbone.load_state_dict(checkpoint['state_dict'])
+            # path_to_mlpcd_weights = os.path.join(os.path.dirname(__file__), 'saved_models', 'mlp_cd.ckpt')
+            # checkpoint = torch.load(path_to_mlpcd_weights, map_location=device)
+            # checkpoint['state_dict'] = {key.replace('model.', ''): value for key, value in checkpoint['state_dict'].items()}
+            # self.cd_backbone.load_state_dict(checkpoint['state_dict'])
             self.cd_backbone.final_fc = nn.Identity()
             
-            for param in self.cd_backbone.parameters():
-                param.requires_grad = False
+            # for param in self.cd_backbone.parameters():
+            #     param.requires_grad = False
 
 
         self.dropout = nn.Dropout(p=dropout)  # Dropout with 50% probability

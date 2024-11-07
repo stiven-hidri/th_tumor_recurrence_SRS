@@ -1,7 +1,7 @@
 import os
 import pickle
 from matplotlib import pyplot as plt
-from sklearn.metrics import auc, confusion_matrix, roc_curve
+from sklearn.metrics import auc, confusion_matrix, roc_curve, precision_recall_curve
 import torch
 import numpy as np
 from lightning.pytorch import LightningModule
@@ -9,7 +9,7 @@ from models.base_model import BaseModel
 from models.conv_rnn import ConvRNN
 from models.base_model_enhanced import BaseModel_Enhanced
 from models.model_wdt import ModelWDT
-from models.conv_long_lstm import ConvLongLSTM
+from models.conv_lstm import ConvLongLSTM
 from models.mlp_cd import MlpCD
 from models.base_model_enhancedV2 import BaseModel_EnhancedV2
 from utils.loss_functions import BCELoss, WeightedBCELoss, FocalLoss
@@ -33,7 +33,7 @@ class ClassificationModule(LightningModule):
             self.model = BaseModel(dropout=dropout, use_clinical_data=use_clinical_data)
         elif name == 'conv_rnn':
             self.model = ConvRNN(dropout=dropout, rnn_type=rnn_type, hidden_size=hidden_size, num_layers=num_layers, use_clinical_data=use_clinical_data)
-        elif name == 'conv_long_lstm':
+        elif name == 'conv_lstm':
             self.model = ConvLongLSTM(dropout=dropout, hidden_size=hidden_size, num_layers=num_layers, use_clinical_data=use_clinical_data)
         elif name == 'mlp_cd':
             self.model = MlpCD(dropout=dropout)
@@ -70,14 +70,16 @@ class ClassificationModule(LightningModule):
         self.validation_labels = []
         self.validation_losses = []
         self.validation_outputs = []
+        self.validation_best_threshold = .5
+        self.best_validation_statistics = {}
 
-    def forward(self, mr, rtd, mr_rtd_fusion, clinic_data):
+    def forward(self, clinical_data, mr=None, rtd=None, mr_rtd_fusion=None):
         if 'mlp_cd' in self.name:
-            y = self.model(clinic_data)
+            y = self.model(clinical_data)
         elif 'model_wdt' in self.name:
-            y = self.model(mr_rtd_fusion, clinic_data)
+            y = self.model(mr_rtd_fusion, clinical_data)
         else:
-            y = self.model(mr, rtd, clinic_data)
+            y = self.model(mr, rtd, clinical_data)
             
         return y
 
@@ -85,12 +87,12 @@ class ClassificationModule(LightningModule):
         return self.lf.forward(prediction, label)
 
     def training_step(self, batch):
-        mr, rtd, mr_rtd_fusion, clinic_data, label = batch
-        
         if self.name == 'model_wdt':
-            prediction = self(mr_rtd_fusion=mr_rtd_fusion, clinic_data=clinic_data)
+            mr_rtd_fusion, clinical_data, label = batch
+            prediction = self(mr_rtd_fusion=mr_rtd_fusion, clinical_data=clinical_data)
         else:
-            prediction = self(mr=mr, rtd=rtd, clinic_data=clinic_data)
+            mr, rtd, clinical_data, label = batch
+            prediction = self(mr=mr, rtd=rtd, clinical_data=clinical_data)
         
         loss = self.loss_function(prediction, label)
         self.log('train_loss', loss.item(), logger=True, prog_bar=True, on_step=False, on_epoch=True)
@@ -109,20 +111,22 @@ class ClassificationModule(LightningModule):
         recall = TP / (TP + FN) if (TP + FN) > 0 else 0
         precision = TP / (TP + FP) if (TP + FP) > 0 else 0
         
+        precision_curve, recall_curve, thresholds = precision_recall_curve(true_labels, pred_labels)
+        
         statistics = {
             "accuracy": (TP + TN) / (TP + TN + FP + FN) if (TP + TN + FP + FN) > 0 else 0,
             "recall": recall,
             "specificity": TN / (TN + FP) if (TN + FP) > 0 else 0,
             "precision": precision,
             "f1_score": 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0,
-            "pr_auc": auc(recall, precision)
+            "pr_auc": auc(recall_curve, precision_curve)
         }
         
         return statistics
 
     def choose_best_threshold_validation(self):
-        pred_probs = [p.cpu() for p in self.validation_outputs[-1]]
-        true_labels = [l.cpu() for l in self.validation_labels[-1]]
+        pred_probs = [p.item() for p in self.validation_outputs[-1]]
+        true_labels = [l.item() for l in self.validation_labels[-1]]
                 
         fpr, tpr, thresholds = roc_curve(true_labels, pred_probs)
 
@@ -132,26 +136,26 @@ class ClassificationModule(LightningModule):
         return ['j'], [best_t_j], [self.calculate_statistics(pred_probs, true_labels, best_t_j)]
 
     def on_validation_epoch_start(self):
-        self.validation_labelsa.append([])
+        self.validation_labels.append([])
         self.validation_losses.append([])
         self.validation_outputs.append([])
 
     def validation_step(self, batch):
-        mr, rtd, mr_rtd_fusion, clinic_data, label = batch
-        
         if self.name == 'model_wdt':
-            prediction = self(mr_rtd_fusion=mr_rtd_fusion, clinic_data=clinic_data)
+            mr_rtd_fusion, clinical_data, label = batch
+            prediction = self(mr_rtd_fusion=mr_rtd_fusion, clinical_data=clinical_data)
         else:
-            prediction = self(mr=mr, rtd=rtd, clinic_data=clinic_data)
+            mr, rtd, clinical_data, label = batch
+            prediction = self(mr=mr, rtd=rtd, clinical_data=clinical_data)
             
         loss = self.loss_function(prediction, label)
         
         self.log('val_loss', loss.item(), logger=True, prog_bar=True, on_step=False, on_epoch=True)
         
-        for i in range(label.shape[0]):
-            self.validation_outputs[-1].append(torch.sigmoid(prediction[i]))
-            self.validation_labels[-1].append(label[i])
-            self.validation_losses[-1].append(loss[i].item())
+        self.validation_outputs[-1].extend(torch.sigmoid(prediction))
+        self.validation_labels[-1].extend(label)
+        
+        self.validation_losses[-1].append(loss.item())
     
         return {"loss": loss}
         
@@ -168,19 +172,21 @@ class ClassificationModule(LightningModule):
         
         names, thresholds, statistics = self.choose_best_threshold_validation()
         
-        return thresholds[-1]
+        self.best_validation_statistics = statistics[0]
+        
+        self.validation_best_threshold = thresholds[0]
     
     def predict_step(self, batch, batch_idx):
-        mr, rtd, mr_rtd_fusion, clinic_data, labels = batch
-
-        if self.name == "model_wdt":
-            logits = self(mr_rtd_fusion, clinic_data)
+        if self.name == 'model_wdt':
+            mr_rtd_fusion, clinical_data, label = batch
+            logits = self(mr_rtd_fusion=mr_rtd_fusion, clinical_data=clinical_data)
         else:
-            logits = self(mr, rtd, clinic_data)
+            mr, rtd, clinical_data, label = batch
+            logits = self(mr=mr, rtd=rtd, clinical_data=clinical_data)
 
         predictions = torch.sigmoid(logits)
 
-        return {"predictions": predictions, "labels": labels}
+        return {"predictions": predictions, "labels": label}
 
     def configure_optimizers(self):
         scheduler = None
