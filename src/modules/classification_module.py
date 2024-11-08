@@ -7,9 +7,9 @@ import numpy as np
 from lightning.pytorch import LightningModule
 from models.base_model import BaseModel
 from models.conv_rnn import ConvRNN
-from models.base_model_enhanced import BaseModel_Enhanced
-from models.model_wdt import ModelWDT
-from models.conv_lstm import ConvLongLSTM
+from models.wdt_conv import WDTConv
+from models.conv_lstm import ConvLSTM
+from models.trans_med import TransMedModel
 from models.mlp_cd import MlpCD
 from models.base_model_enhancedV2 import BaseModel_EnhancedV2
 from utils.loss_functions import BCELoss, WeightedBCELoss, FocalLoss
@@ -25,16 +25,16 @@ class ClassificationModule(LightningModule):
         # Network
         if name == 'base_model_enhancedV2':
             self.model = BaseModel_EnhancedV2(dropout=dropout, use_clinical_data=use_clinical_data)
-        elif name == 'base_model_enhanced':
-            self.model = BaseModel_Enhanced(dropout=dropout, use_clinical_data=use_clinical_data)
-        elif name == 'model_wdt':
-            self.model = ModelWDT(dropout=dropout, use_clinical_data=use_clinical_data)
+        elif name == 'trans_med':
+            self.model = TransMedModel()
+        elif name == 'wdt_conv':
+            self.model = WDTConv(dropout=dropout, use_clinical_data=use_clinical_data)
         elif name == 'base_model':
             self.model = BaseModel(dropout=dropout, use_clinical_data=use_clinical_data)
         elif name == 'conv_rnn':
             self.model = ConvRNN(dropout=dropout, rnn_type=rnn_type, hidden_size=hidden_size, num_layers=num_layers, use_clinical_data=use_clinical_data)
         elif name == 'conv_lstm':
-            self.model = ConvLongLSTM(dropout=dropout, hidden_size=hidden_size, num_layers=num_layers, use_clinical_data=use_clinical_data)
+            self.model = ConvLSTM(dropout=dropout, hidden_size=hidden_size, num_layers=num_layers, use_clinical_data=use_clinical_data)
         elif name == 'mlp_cd':
             self.model = MlpCD(dropout=dropout)
         else:
@@ -76,7 +76,7 @@ class ClassificationModule(LightningModule):
     def forward(self, clinical_data, mr=None, rtd=None, mr_rtd_fusion=None):
         if 'mlp_cd' in self.name:
             y = self.model(clinical_data)
-        elif 'model_wdt' in self.name:
+        elif 'wdt_conv' in self.name:
             y = self.model(mr_rtd_fusion, clinical_data)
         else:
             y = self.model(mr, rtd, clinical_data)
@@ -87,7 +87,7 @@ class ClassificationModule(LightningModule):
         return self.lf.forward(prediction, label)
 
     def training_step(self, batch):
-        if self.name == 'model_wdt':
+        if self.name == 'wdt_conv':
             mr_rtd_fusion, clinical_data, label = batch
             prediction = self(mr_rtd_fusion=mr_rtd_fusion, clinical_data=clinical_data)
         else:
@@ -141,7 +141,7 @@ class ClassificationModule(LightningModule):
         self.validation_outputs.append([])
 
     def validation_step(self, batch):
-        if self.name == 'model_wdt':
+        if self.name == 'wdt_conv':
             mr_rtd_fusion, clinical_data, label = batch
             prediction = self(mr_rtd_fusion=mr_rtd_fusion, clinical_data=clinical_data)
         else:
@@ -177,7 +177,7 @@ class ClassificationModule(LightningModule):
         self.validation_best_threshold = thresholds[0]
     
     def predict_step(self, batch, batch_idx):
-        if self.name == 'model_wdt':
+        if self.name == 'wdt_conv':
             mr_rtd_fusion, clinical_data, label = batch
             logits = self(mr_rtd_fusion=mr_rtd_fusion, clinical_data=clinical_data)
         else:
@@ -201,7 +201,7 @@ class ClassificationModule(LightningModule):
         
         elif self.optimizer == 'sgd':
             print("Using SGD optimizer")
-            optimizers = torch.optim.SGD(self.parameters(), lr = self.lr)
+            optimizers = torch.optim.SGD(self.parameters(), lr = self.lr, momentum=.7, weight_decay=self.weight_decay)
             
         ##Schedulers
         

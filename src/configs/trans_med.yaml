@@ -1,15 +1,15 @@
 dataset:
   name: name
 model:
-  name: model_wdt
+  name: wdt_conv
   epochs: 100
   batch_size: 32
-  optimizer: adam
+  optimizer: sgd
   scheduler: plateau
   rnn_type: None
   hidden_size: 0
   num_layers: 0
-  lr: 5e-5
+  lr: 1e-3
   weight_decay: 1e-3
   dropout: .5
   only_test: False

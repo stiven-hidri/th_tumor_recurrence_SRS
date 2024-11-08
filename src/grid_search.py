@@ -13,7 +13,7 @@ from modules import ClassificationModule
 import os
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from sklearn.model_selection import StratifiedGroupKFold
-from params_grid import param_grid_basemodel, param_grid_convlstm, param_grid_mlpcd, param_grid_wdt
+from params_grid import *
 import numpy as np
 from collections import defaultdict, Counter
 from argparse import ArgumentParser
@@ -45,7 +45,6 @@ model_parameters = [
 
 model_parameters_toshow = [ 
     "batch_size",
-    "rnn_type",
     "hidden_size",
     "num_layers",
     "lr",
@@ -255,8 +254,10 @@ if __name__ == '__main__':
         param_grid = param_grid_convlstm
     elif config.model.name == "mlp_cd":
         param_grid = param_grid_mlpcd
-    elif config.model.name == "model_wdt":
+    elif config.model.name == "wdt_conv":
         param_grid = param_grid_wdt
+    elif config.model.name == "trans_med":
+        param_grid = param_grid_transmed
     else:
         raise NotImplementedError("Model not implemented")
     
