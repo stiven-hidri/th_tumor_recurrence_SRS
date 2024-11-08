@@ -9,6 +9,7 @@ import numpy as np
 import torch
 from sklearn import preprocessing
 import torch.nn.functional as F
+from scipy.ndimage import zoom
 
 class ClassifierDatasetSplit(Dataset):
     def __init__(self, model_name:str, data:dict, split_name:str, p_augmentation:float=None, augmentation_techniques:list=None):
@@ -251,6 +252,34 @@ class ClassifierDataset(Dataset):
                         
         return max_values
 
+    def __pad_resize_images__(self, global_data, desired_shape=(40, 40, 40)):        
+        keys = ['mr', 'rtd']
+        for i in range(len(global_data)):
+            for k in keys:
+                image = global_data[k][i]
+                
+                cropped_shape = np.array(image.shape)
+
+                factor = np.min(np.divide(desired_shape,cropped_shape))
+                
+                if factor < 1:
+                    image = zoom(image, (factor,factor,factor), order=1)
+                
+                cropped_shape = np.array(image.shape)
+                
+                pad_before = np.maximum((desired_shape - cropped_shape) // 2, 0)
+                pad_after = np.maximum(desired_shape - cropped_shape - pad_before, 0)
+                
+                image = np.pad(image, (
+                    (pad_before[0], pad_after[0]), 
+                    (pad_before[1], pad_after[1]), 
+                    (pad_before[2], pad_after[2])
+                ), mode='constant', constant_values=0)
+                
+                global_data[k][i] = image
+                
+        return global_data
+
     def __load__(self) -> None:
         with open(os.path.join(self.DATA_PATH, 'global_data.pkl'), 'rb') as f:
             global_data = pickle.load(f)
@@ -262,6 +291,8 @@ class ClassifierDataset(Dataset):
             
         global_data['clinical_data'] = global_data['clinic_data']
         del global_data['clinic_data']
+            
+        global_data = self.__pad_resize_images__(global_data)
             
         global_data = self.__discretize_categorical_features__(global_data)
         

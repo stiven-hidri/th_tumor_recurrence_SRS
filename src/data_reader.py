@@ -1,21 +1,13 @@
-import argparse
 import os
 import pickle
-import random
-import re
 import pandas as pd
 import numpy as np
 from rt_utils import RTStructBuilder
 import shutil
-from scipy.ndimage import zoom
-from sklearn import preprocessing
-import torch
 from utils.utils import couple_roi_names, process_mets, process_prim, process_roi
 import SimpleITK as sitk
 import numpy as np
-import torch.nn.functional as F
-from scipy.spatial.distance import pdist, squareform
-import pywt
+from scipy.spatial.distance import pdist
 
 class RawData_Reader():
     def __init__(self) -> None:
@@ -120,20 +112,6 @@ class RawData_Reader():
                 os.remove(file_path)
             elif os.path.isdir(file_path):
                 shutil.rmtree(file_path)
-                
-        # for filename in os.listdir(os.path.join(self, 'lesions_cropped')):
-        #     file_path = os.path.join('display', 'lesions_cropped', filename)
-        #     if os.path.isfile(file_path) or os.path.islink(file_path):
-        #         os.remove(file_path)
-        #     elif os.path.isdir(file_path):
-        #         shutil.rmtree(file_path)
-                
-        # for filename in os.listdir(os.path.join('display', 'data_whole_union')):
-        #     file_path = os.path.join('display', 'lesions_cropped', filename)
-        #     if os.path.isfile(file_path) or os.path.islink(file_path):
-        #         os.remove(file_path)
-        #     elif os.path.isdir(file_path):
-        #         shutil.rmtree(file_path)
 
     def __get_mr_rtd_rts_path__(self, values):
         path_MR = os.path.join(self.ORIGIN_DATA_FOLDER_PATH, values.loc[values['modality'] == 'MR', 'file_path'].iloc[0])
