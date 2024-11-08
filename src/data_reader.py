@@ -1,3 +1,4 @@
+import argparse
 import os
 import pickle
 import pandas as pd
@@ -41,14 +42,17 @@ class RawData_Reader():
         
         self.ALL_SPLITS = None
     
-    def full_run(self, cleanOutDir = True):
+    def full_run(self, cleanOutDir = True, debug = False):
         self.__adjust_dataframes__()
         
         if cleanOutDir:
             self.__clean_output_directory__(self.OUTPUT_PROCESSED_DATA_FOLDER_PATH)
         
-        #vmetadata_by_subjectid = self.rawdata_meta[(self.rawdata_meta['subject_id'] == 'GK_114')].groupby(['subject_id'])
-        metadata_by_subjectid = self.rawdata_meta.groupby(['subject_id'])
+        if debug:
+            metadata_by_subjectid = self.rawdata_meta[(self.rawdata_meta['subject_id'] == 'GK_114')].groupby(['subject_id'])
+        else:
+            metadata_by_subjectid = self.rawdata_meta.groupby(['subject_id'])
+            
         total_subjects = len(metadata_by_subjectid)
         
         print('Saving dcm to npy...')
@@ -80,11 +84,11 @@ class RawData_Reader():
                     
             print(f'\rStep: {cnt+1}/{total_subjects}', end='')
         
-        self.__preprocess_clinical_data__()
+        self.__clean_clinical_data__()
         
         self.__save__()
         
-        print('\nData has been read successfully!\n')
+        print('\nData has been read successfully!')
     
     def __adjust_dataframes__(self):
         rawdata_meta_renaming = {'Study Date':'study_date','Study UID':'study_uid','Subject ID':'subject_id', 'Modality':'modality', 'File Location':'file_path'}
@@ -225,7 +229,7 @@ class RawData_Reader():
             self.global_data['clinical_data'].append(clinical_data[i])
             self.global_data['label'].append(labels[i]) 
     
-    def __preprocess_clinical_data__(self):
+    def __clean_clinical_data__(self):
         for i, value in enumerate(self.global_data['clinical_data']):
             self.global_data['clinical_data'][i][0] = process_mets(self.global_data['clinical_data'][i][0])
             self.global_data['clinical_data'][i][1] = process_prim(self.global_data['clinical_data'][i][1])
@@ -233,7 +237,7 @@ class RawData_Reader():
             self.global_data['clinical_data'][i][4] = process_roi(self.global_data['clinical_data'][i][4])
         
     def __save__(self):
-        print('Saving data...', end='\r')
+        print('\nSaving data...')
         
         target = self.OUTPUT_PROCESSED_DATA_FOLDER_PATH
     
@@ -241,5 +245,9 @@ class RawData_Reader():
             pickle.dump(self.global_data, f)
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--debug', action='store_true', dest='DEBUG')
+    args = parser.parse_args()
+    
     dr = RawData_Reader()
-    dr.full_run()
+    dr.full_run(debug=args.DEBUG)
