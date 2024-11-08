@@ -92,7 +92,7 @@ class RawData_Reader():
                     
             print(f'\rStep: {cnt+1}/{total_subjects}', end='')
         
-        self.__preprocess_clinical_data__()
+        self.__clean_clinical_data__()
         
         self.__save__()
         
@@ -269,7 +269,7 @@ class RawData_Reader():
             self.global_data['clinical_data'].append(clinical_data[i])
             self.global_data['label'].append(labels[i]) 
     
-    def __preprocess_clinical_data__(self):
+    def __clean_clinical_data__(self):
         for i, value in enumerate(self.global_data['clinical_data']):
             self.global_data['clinical_data'][i][0] = process_mets(self.global_data['clinical_data'][i][0])
             self.global_data['clinical_data'][i][1] = process_prim(self.global_data['clinical_data'][i][1])
