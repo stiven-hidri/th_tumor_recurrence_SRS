@@ -49,14 +49,18 @@ class RawData_Reader():
         
         self.ALL_SPLITS = None
     
-    def full_run(self, cleanOutDir = True):
+    def full_run(self, cleanOutDir = True, debug = False):
         self.__adjust_dataframes__()
         
         if cleanOutDir:
             self.__clean_output_directory__(self.OUTPUT_PROCESSED_DATA_FOLDER_PATH)
         
-        #vmetadata_by_subjectid = self.rawdata_meta[(self.rawdata_meta['subject_id'] == 'GK_114')].groupby(['subject_id'])
-        metadata_by_subjectid = self.rawdata_meta.groupby(['subject_id'])
+        if debug:
+            metadata_by_subjectid = self.rawdata_meta[(self.rawdata_meta['subject_id'] == 'GK_114')].groupby(['subject_id'])
+        else:
+            metadata_by_subjectid = self.rawdata_meta.groupby(['subject_id'])
+            
+        
         total_subjects = len(metadata_by_subjectid)
         
         print('Saving dcm to npy...')
@@ -281,5 +285,10 @@ class RawData_Reader():
             pickle.dump(self.global_data, f)
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--debug', action='store_true', help='Enable debug mode', dest='DEBUG')
+    
+    args = parser.parse_args()
+    
     dr = RawData_Reader()
-    dr.full_run()
+    dr.full_run(debug = args.DEBUG)
