@@ -1,30 +1,30 @@
 dataset:
   name: name
 model:
-  name: base_model
-  epochs: 100
-  batch_size: 32
+  name: conv_lstm
+  epochs: 150
+  batch_size: 2
   optimizer: adam
   scheduler: plateau
-  rnn_type: None
-  hidden_size: 0
-  num_layers: 0
-  lr: 5e-5
+  rnn_type: none
+  hidden_size: 256
+  num_layers: 1
+  lr: 1e-4
   weight_decay: 1e-3
-  dropout: .5
+  dropout: .3
   only_test: False
-  lf: fl          #wbce, bce, fl
   use_clinical_data: True
+  lf: fl          #wbce, bce, fl
   alpha_fl: .75
-  gamma_fl: 3
+  gamma_fl: 2
   pos_weight: .8
   augmentation_techniques: ['random_affine', 'shear', 'random_rotate', 'random_flip']
   p_augmentation: .3
-  p_augmentation_per_technique: .3
+  p_augmentation_per_technique: .4
 logger:
   log_dir: ./log
-  experiment_name: train_base_model
-  version: 1
+  experiment_name: conv_lstm_1_cd_gridsearch
+  version: 0
 checkpoint:
   monitor: val_loss
   save_top_k: 1

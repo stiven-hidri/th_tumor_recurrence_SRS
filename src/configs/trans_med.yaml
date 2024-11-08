@@ -1,30 +1,30 @@
 dataset:
   name: name
 model:
-  name: conv_long_lstm
-  epochs: 150
-  batch_size: 2
-  optimizer: adam
+  name: wdt_conv
+  epochs: 100
+  batch_size: 32
+  optimizer: sgd
   scheduler: plateau
-  rnn_type: none
-  hidden_size: 256
-  num_layers: 1
-  learning_rate: 1e-4
+  rnn_type: None
+  hidden_size: 0
+  num_layers: 0
+  lr: 1e-3
   weight_decay: 1e-3
-  dropout: .3
+  dropout: .5
   only_test: False
-  use_clinical_data: True
   lf: fl          #wbce, bce, fl
+  use_clinical_data: True
   alpha_fl: .75
-  gamma_fl: 2
+  gamma_fl: 3
   pos_weight: .8
   augmentation_techniques: ['random_affine', 'shear', 'random_rotate', 'random_flip']
   p_augmentation: .3
-  p_augmentation_per_technique: .4
+  p_augmentation_per_technique: .3
 logger:
   log_dir: ./log
-  experiment_name: conv_long_lstm_1_cd_gridsearch
-  version: 0
+  experiment_name: train_base_model
+  version: 1
 checkpoint:
   monitor: val_loss
   save_top_k: 1

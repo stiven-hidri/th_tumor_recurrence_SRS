@@ -54,17 +54,9 @@ class BaseModel(nn.Module):
         else:
             self.final_fc = nn.Linear(128 * 2, 1)
         if self.use_clinical_data:
-            self.cd_backbone = MlpCD()
-            path_to_mlpcd_weights = os.path.join(os.path.dirname(__file__), 'saved_models', 'mlp_cd.ckpt')
-            checkpoint = torch.load(path_to_mlpcd_weights)
-            checkpoint['state_dict'] = {key.replace('model.', ''): value for key, value in checkpoint['state_dict'].items()}
-            self.cd_backbone.load_state_dict(checkpoint['state_dict'])
-            self.cd_backbone.final_fc = nn.Identity()
+            self.cd_backbone = MlpCD(pretrained=True)
             
-            for param in self.cd_backbone.fc1.parameters():
-                param.requires_grad = False
-            for param in self.cd_backbone.fc2.parameters():
-                param.requires_grad = False
+            self.cd_backbone.final_fc = nn.Identity()
         
     def forward(self, les_input, dose_input, clinical_input=None):
         

@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -100,7 +101,7 @@ class Bottleneck(nn.Module):
         return out
 
 class ResNet34_3d(nn.Module):
-    def __init__(self, shortcut_type='B', no_cuda = False):
+    def __init__(self, shortcut_type='B', no_cuda = False, pretrained = True):
         
         self.block = BasicBlock
         self.layers = [3, 4, 6, 3]
@@ -121,13 +122,25 @@ class ResNet34_3d(nn.Module):
         self.layer4 = self._make_layer(self.block, 512, self.layers[3], shortcut_type, stride=1, dilation=4)
         
         self.avg_pool_3d = nn.AdaptiveAvgPool3d((1, 1, 1))
-
-        for m in self.modules():
-            if isinstance(m, nn.Conv3d):
-                m.weight = nn.init.kaiming_normal(m.weight, mode='fan_out')
-            elif isinstance(m, nn.BatchNorm3d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
+        
+        if pretrained:
+            weigths_path = os.path.join(os.path.dirname(__file__), 'saved_models', 'resnet_34_23dataset.pth')
+            
+            net_dict = self.state_dict()
+    
+            pretrain = torch.load(weigths_path)
+            pretrain_dict = {k: v for k, v in pretrain['state_dict'].items() if k in net_dict.keys()}
+                
+            net_dict.update(pretrain_dict)
+            self.load_state_dict(net_dict)
+            
+        else:
+            for m in self.modules():
+                if isinstance(m, nn.Conv3d):
+                    m.weight = nn.init.kaiming_normal(m.weight, mode='fan_out')
+                elif isinstance(m, nn.BatchNorm3d):
+                    m.weight.data.fill_(1)
+                    m.bias.data.zero_()
 
     def _make_layer(self, block, planes, blocks, shortcut_type, stride=1, dilation=1):
         downsample = None

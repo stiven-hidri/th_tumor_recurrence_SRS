@@ -11,7 +11,7 @@ class BackboneCNN(nn.Module):
         
         super(BackboneCNN, self).__init__()
     
-        self.backbone = models.resnet34()
+        self.backbone = models.resnet34(pretrained=True)
         
         self.backbone.conv1 = nn.Conv2d(
             in_channels=2,out_channels=self.backbone.conv1.out_channels,
@@ -21,6 +21,10 @@ class BackboneCNN(nn.Module):
             bias=self.backbone.conv1.bias
         )
         
+        with torch.no_grad():
+            original_weights = self.backbone.conv1.weight
+            self.backbone.conv1.weight[:, :2, :, :] = original_weights[:, :2, :, :]
+        
         in_fatures = self.backbone.fc.in_features
         
         self.backbone.fc = nn.Linear(in_fatures, out_features)
@@ -29,9 +33,9 @@ class BackboneCNN(nn.Module):
         return self.backbone(x)
 
 # LSTM Model
-class ConvLongLSTM(nn.Module):
+class ConvLSTM(nn.Module):
     def __init__(self, dropout:.3, hidden_size=64, num_layers = 2, backbone_output_feat = 256, clinical_data_output_dim = 10, use_clinical_data=True):
-        super(ConvLongLSTM, self).__init__()
+        super(ConvLSTM, self).__init__()
         self.use_clinical_data=use_clinical_data
         self.backbone = BackboneCNN(out_features=backbone_output_feat)
         
@@ -42,17 +46,8 @@ class ConvLongLSTM(nn.Module):
         self.hidden_size = hidden_size
         
         if self.use_clinical_data:
-            self.cd_backbone = MlpCD()
-            path_to_mlpcd_weights = os.path.join(os.path.dirname(__file__), 'saved_models', 'mlp_cd.ckpt')
-            checkpoint = torch.load(path_to_mlpcd_weights)
-            checkpoint['state_dict'] = {key.replace('model.', ''): value for key, value in checkpoint['state_dict'].items()}
-            self.cd_backbone.load_state_dict(checkpoint['state_dict'])
+            self.cd_backbone = MlpCD(pretrained=True)
             self.cd_backbone.final_fc = nn.Identity()
-            
-            for param in self.cd_backbone.fc1.parameters():
-                param.requires_grad = False
-            for param in self.cd_backbone.fc2.parameters():
-                param.requires_grad = False
 
         self.layer_norm = nn.LayerNorm(hidden_size)
         

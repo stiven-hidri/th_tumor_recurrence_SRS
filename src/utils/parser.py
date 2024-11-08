@@ -32,6 +32,7 @@ class Parser:
         self.parser.add_argument('--augmentation_techniques', type=list, help='Augmentation techinques to apply', dest='AUGMENTATION_TECHNIQUES')
         self.parser.add_argument('--p_augmentation', type=float, help='Probability to augment', dest='P_AUGMENTATION')
         self.parser.add_argument('--p_augmentation_per_technique', type=float, help='Probability to apply each technique', dest='P_AUGMENTATION_PER_TECHNIQUE')
+        self.parser.add_argument('--keep_test', default=False, action='store_true', help='Probability to apply each technique', dest='KEEP_TEST')
 
         # Logger args
         self.parser.add_argument('--experiment_name', type=str, help='Experiment name', dest='EXPERIMENT_NAME')
@@ -62,7 +63,7 @@ class Parser:
             config = Config(**d)
 
         if self.args.LR is not None:
-            config.model.learning_rate = self.args.LR
+            config.model.lr = self.args.LR
 
         if self.args.WEIGHT_DECAY is not None:
             config.model.weight_decay = self.args.WEIGHT_DECAY
@@ -117,5 +118,8 @@ class Parser:
             
         if self.args.P_AUGMENTATION_PER_TECHNIQUE is not None:
             config.logger.p_augmentation_per_technique = self.args.P_AUGMENTATION_PER_TECHNIQUE
+            
+        if self.args.KEEP_TEST is not None:
+            config.logger.keep_test = self.args.KEEP_TEST
 
         return config, device

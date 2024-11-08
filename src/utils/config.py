@@ -10,7 +10,7 @@ class ModelConfig(BaseModel):
     name: str
     epochs: int
     batch_size: int
-    learning_rate: float
+    lr: float
     weight_decay: float
     rnn_type: str
     hidden_size: int
@@ -36,6 +36,7 @@ class LoggerConfig(BaseModel):
     log_dir: Path
     experiment_name: str
     version: int
+    keep_test: Optional[bool] = False
 
 class CheckpointConfig(BaseModel):
     monitor: str

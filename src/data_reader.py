@@ -25,11 +25,11 @@ class RawData_Reader():
         if os.path.isdir(os.path.join(self.DATA_PATH, 'origin')):
             self.ORIGIN_DATA_FOLDER_PATH = os.path.join(self.DATA_PATH, 'origin')
             self.ORIGIN_DATA_META_FILE_PATH = os.path.join(self.DATA_PATH, 'origin', 'metadata.csv')
-            self.CLINIC_DATA_FILE_PATH = os.path.join(self.DATA_PATH, 'origin', 'Brain_TR_GammaKnife_Clinical_Information.xlsx')
+            self.CLINICAL_DATA_FILE_PATH = os.path.join(self.DATA_PATH, 'origin', 'Brain_TR_GammaKnife_Clinical_Information.xlsx')
             #adjusting metadata and clinical data dataframes
             self.rawdata_meta = pd.read_csv(self.ORIGIN_DATA_META_FILE_PATH)
-            self.clinic_data_ll = pd.read_excel(self.CLINIC_DATA_FILE_PATH, sheet_name='lesion_level')
-            self.clinic_data_cl = pd.read_excel(self.CLINIC_DATA_FILE_PATH, sheet_name='course_level')
+            self.clinical_data_ll = pd.read_excel(self.CLINICAL_DATA_FILE_PATH, sheet_name='lesion_level')
+            self.clinical_data_cl = pd.read_excel(self.CLINICAL_DATA_FILE_PATH, sheet_name='course_level')
         
         self.OUTPUT_PROCESSED_DATA_FOLDER_PATH = os.path.join(self.DATA_PATH, 'processed')
         self.OUTPUT_RAW_DATA_FOLDER_PATH = os.path.join(self.DATA_PATH, 'raw')
@@ -41,93 +41,21 @@ class RawData_Reader():
         
         self.split_info = None
         
-        self.global_data = {'mr': [], 'rtd': [], 'clinic_data': [], 'label': [], 'subject_id': []}
+        self.global_data = {'mr': [], 'rtd': [], 'clinical_data': [], 'label': [], 'subject_id': []}
         #final outputs 
         self.train_set = None
         self.val_set = None
         self.test_set = None
         
         self.ALL_SPLITS = None
-        
-    def only_process(self):
-        self.__clean_output_directory__(dr.OUTPUT_PROCESSED_DATA_FOLDER_PATH)
-        self.__load__()
-        self.__preprocess_clinic_data__()
-        self.__discretize_categorical_features__()
-        
-        self.__generate_split__()
-        self.__normalize_splits__()
-        self.__one_hot__()
-        self.__augment_train_set__()
-        self.__pad_resize_images__()
-        self.__wdt_fusion__()
-        self.__save__(raw=False)
-        
-        self.__print_statistics__()
-        
-        print('Done!', end='\r')
-        
-    def __pad_resize__(self, image, desired_shape):        
-        cropped_shape = np.array(image.shape)
-
-        factor = np.min(np.divide(desired_shape,cropped_shape))
-        
-        if factor < 1:
-            image = zoom(image, (factor,factor,factor), order=1)
-        
-        cropped_shape = np.array(image.shape)
-        
-        pad_before = np.maximum((desired_shape - cropped_shape) // 2, 0)
-        pad_after = np.maximum(desired_shape - cropped_shape - pad_before, 0)
-        
-        image = np.pad(image, (
-            (pad_before[0], pad_after[0]), 
-            (pad_before[1], pad_after[1]), 
-            (pad_before[2], pad_after[2])
-        ), mode='constant', constant_values=0)
-        
-        return image
-        
-    def __pad_resize_images__(self, desired_shape = (90, 90, 90)):
-        for i_split, split in enumerate(self.ALL_SPLITS):
-            for i_tensor in range(len(split['mr'])):
-                mr = self.__pad_resize__(split['mr'][i_tensor], desired_shape)
-                rtd = self.__pad_resize__(split['rtd'][i_tensor], desired_shape)
-                self.ALL_SPLITS[i_split]['mr'][i_tensor] = torch.Tensor(mr).to(torch.float32)
-                self.ALL_SPLITS[i_split]['rtd'][i_tensor] = torch.Tensor(rtd).to(torch.float32)
-
-    def __wdt_fusion__(self):
-        for i_split, split in enumerate(self.ALL_SPLITS):
-            for i_tensor in range(len(split['mr'])):
-        
-                coeffs_mr = pywt.dwtn(split['mr'][i_tensor], 'db1', axes=(0, 1, 2))  # Decompose with Daubechies wavelet
-                coeffs_rtd = pywt.dwtn(split['rtd'][i_tensor], 'db1', axes=(0, 1, 2))
-                    
-                # fused_details_avg = {key: (coeffs_mr[key]*.6 + coeffs_rtd[key]*.4) for key in coeffs_mr.keys()}
-
-                fused_details_e = {}
-                for key in coeffs_mr.keys():
-                    if key == 'aaa':  # Skip approximation coefficients for energy fusion
-                        fused_details_e[key] = (coeffs_mr[key] + coeffs_rtd[key]) / 2
-                    else:
-                        energy1 = np.abs(coeffs_mr[key]) ** 2
-                        energy2 = np.abs(coeffs_rtd[key]) ** 2
-                        fused_details_e[key] = np.where(energy1 > energy2, coeffs_mr[key], coeffs_rtd[key])
-
-                fused_image_e = pywt.idwtn(fused_details_e, 'db1', axes=(0, 1, 2))
-                fused_image_e = torch.Tensor(fused_image_e) * ( split['mr'][i_tensor] > 0 )
-                self.ALL_SPLITS[i_split]['mr_rtd_fusion'].append(fused_image_e)
-        
+    
     def full_run(self, cleanOutDir = True):
         self.__adjust_dataframes__()
         
         if cleanOutDir:
-            self.__clean_output_directory__(self.OUTPUT_RAW_DATA_FOLDER_PATH)
             self.__clean_output_directory__(self.OUTPUT_PROCESSED_DATA_FOLDER_PATH)
-            
-        self.__split_subjects__()
         
-        # metadata_by_subjectid = self.rawdata_meta[(self.rawdata_meta['subject_id'] == 'GK_114')].groupby(['subject_id'])
+        #vmetadata_by_subjectid = self.rawdata_meta[(self.rawdata_meta['subject_id'] == 'GK_114')].groupby(['subject_id'])
         metadata_by_subjectid = self.rawdata_meta.groupby(['subject_id'])
         total_subjects = len(metadata_by_subjectid)
         
@@ -154,53 +82,36 @@ class RawData_Reader():
                 mrs, rtds = self.__mask_and_crop__(rois, mr, rtd, masks)
                 
                 labels = self.__get_labels__(rois, subject_id, course)
-                clinic_data = self.__get_clinic_data__(rois, subject_id, course, longest_diameters)
+                clinical_data = self.__get_clinical_data__(rois, subject_id, course, longest_diameters)
                 
-                self.__append_data__(subject_id, mrs, rtds, clinic_data, labels)
+                self.__append_data__(subject_id, mrs, rtds, clinical_data, labels)
                     
             print(f'\rStep: {cnt+1}/{total_subjects}', end='')
         
-        self.__save__(raw=True)
+        self.__preprocess_clinical_data__()
         
-        self.__preprocess_clinic_data__()
-        self.__discretize_categorical_features__()
-        
-        self.__generate_split__()
-        self.__normalize_splits__()
-        
-        self.__one_hot__()
-        self.__augment_train_set__()
-        self.__pad_resize_images__()
-        self.__wdt_fusion__()
-        self.__print_statistics__()
-        
-        self.__save__(raw=False)
+        self.__save__()
         
         print('\nData has been read successfully!\n')
-        
-    def __load__(self):
-        print('Loading data...', end='\r')
-        with open(os.path.join(self.OUTPUT_RAW_DATA_FOLDER_PATH, 'global_data90.pkl'), 'rb') as f:
-            self.global_data = pickle.load(f)
     
     def __adjust_dataframes__(self):
         rawdata_meta_renaming = {'Study Date':'study_date','Study UID':'study_uid','Subject ID':'subject_id', 'Modality':'modality', 'File Location':'file_path'}
-        clinic_data_ll_renaming = {'unique_pt_id': 'subject_id', 'Treatment Course':'course', 'Lesion Location':'roi', 'mri_type':'label', 'duration_tx_to_imag (months)': 'duration_tx_to_imag', 'Fractions':'fractions'}
-        clinic_data_cl_renaming = {'unique_pt_id': 'subject_id', 'Course #':'course', 'Diagnosis (Only want Mets)':'mets_diagnosis', 'Primary Diagnosis':'primary_diagnosis', 'Age at Diagnosis':'age', 'Gender':'gender'}
+        clinical_data_ll_renaming = {'unique_pt_id': 'subject_id', 'Treatment Course':'course', 'Lesion Location':'roi', 'mri_type':'label', 'duration_tx_to_imag (months)': 'duration_tx_to_imag', 'Fractions':'fractions'}
+        clinical_data_cl_renaming = {'unique_pt_id': 'subject_id', 'Course #':'course', 'Diagnosis (Only want Mets)':'mets_diagnosis', 'Primary Diagnosis':'primary_diagnosis', 'Age at Diagnosis':'age', 'Gender':'gender'}
         
         rawdata_meta_types = {'study_date':"datetime64[ns]" ,'study_uid':'string','subject_id':'string', 'modality':'string', 'file_path':'string'}
-        clinic_data_ll_types = {'subject_id':'int64','course':'Int8', 'roi':'string', 'label':'string', 'duration_tx_to_imag':'int8', 'fractions':'int8'}
-        clinic_data_cl_types = {'subject_id':'int64', 'course':'Int8', 'mets_diagnosis':'string', 'primary_diagnosis':'string', 'age':'int8', 'gender':'string'}
+        clinical_data_ll_types = {'subject_id':'int64','course':'Int8', 'roi':'string', 'label':'string', 'duration_tx_to_imag':'int8', 'fractions':'int8'}
+        clinical_data_cl_types = {'subject_id':'int64', 'course':'Int8', 'mets_diagnosis':'string', 'primary_diagnosis':'string', 'age':'int8', 'gender':'string'}
         
         self.rawdata_meta = self.rawdata_meta.drop(self.rawdata_meta.columns.difference(rawdata_meta_renaming.keys()), axis=1).rename(columns=rawdata_meta_renaming)
-        self.clinic_data_ll = self.clinic_data_ll.drop(self.clinic_data_ll.columns.difference(clinic_data_ll_renaming.keys()), axis=1).rename(columns=clinic_data_ll_renaming)
-        self.clinic_data_cl = self.clinic_data_cl.drop(self.clinic_data_cl.columns.difference(clinic_data_cl_renaming.keys()), axis=1).rename(columns=clinic_data_cl_renaming)
+        self.clinical_data_ll = self.clinical_data_ll.drop(self.clinical_data_ll.columns.difference(clinical_data_ll_renaming.keys()), axis=1).rename(columns=clinical_data_ll_renaming)
+        self.clinical_data_cl = self.clinical_data_cl.drop(self.clinical_data_cl.columns.difference(clinical_data_cl_renaming.keys()), axis=1).rename(columns=clinical_data_cl_renaming)
         
         self.rawdata_meta = self.rawdata_meta.astype(rawdata_meta_types)
-        self.clinic_data_ll = self.clinic_data_ll.astype(clinic_data_ll_types)
-        self.clinic_data_cl = self.clinic_data_cl.astype(clinic_data_cl_types)
+        self.clinical_data_ll = self.clinical_data_ll.astype(clinical_data_ll_types)
+        self.clinical_data_cl = self.clinical_data_cl.astype(clinical_data_cl_types)
         
-        self.clinic_data = pd.merge_ordered(self.clinic_data_ll, self.clinic_data_cl, on=['subject_id', 'course'], how='inner')
+        self.clinical_data = pd.merge_ordered(self.clinical_data_ll, self.clinical_data_cl, on=['subject_id', 'course'], how='inner')
 
     def __clean_output_directory__(self, path_dir):
         for filename in os.listdir(path_dir):
@@ -267,7 +178,7 @@ class RawData_Reader():
     def __get_rts__(self, path_RTS, series_path, subject_id, course):
         rt_struct_path = [os.path.join(path_RTS, f) for f in os.listdir(path_RTS) if f.endswith('.dcm')][0]
         rtstruct = RTStructBuilder.create_from(dicom_series_path=series_path, rt_struct_path=rt_struct_path)
-        rois = self.clinic_data.loc[(self.clinic_data['subject_id'] == subject_id) & (self.clinic_data['course'] == course), 'roi'].values
+        rois = self.clinical_data.loc[(self.clinical_data['subject_id'] == subject_id) & (self.clinical_data['course'] == course), 'roi'].values
         
         couples = couple_roi_names(rois, rtstruct.get_roi_names())
         
@@ -289,19 +200,19 @@ class RawData_Reader():
         to_return = []
         
         for roi in rois:    
-            label = self.clinic_data.loc[(self.clinic_data['subject_id']==subject_id)&(self.clinic_data['course']==course)&(self.clinic_data['roi']==roi), ['label']].values[0][0]
+            label = self.clinical_data.loc[(self.clinical_data['subject_id']==subject_id)&(self.clinical_data['course']==course)&(self.clinical_data['roi']==roi), ['label']].values[0][0]
             to_return.append(label)
             
         return to_return
 
-    def __get_clinic_data__(self, rois, subject_id, course, longest_diameters):
+    def __get_clinical_data__(self, rois, subject_id, course, longest_diameters):
         to_return = []
         
         for roi in rois:
-            clinic_data_row = self.clinic_data.loc[(self.clinic_data['subject_id']==subject_id)&(self.clinic_data['course']==course)&(self.clinic_data['roi']==roi), ['mets_diagnosis', 'primary_diagnosis', 'age', 'gender', 'roi', 'fractions']].values[0]
-            clinic_data_row = np.append(clinic_data_row, longest_diameters[roi])
-            clinic_data_row = np.append(clinic_data_row, self.clinic_data.groupby(['subject_id', 'course']).size().get((subject_id, course), 0))
-            to_return.append(clinic_data_row)
+            clinical_data_row = self.clinical_data.loc[(self.clinical_data['subject_id']==subject_id)&(self.clinical_data['course']==course)&(self.clinical_data['roi']==roi), ['mets_diagnosis', 'primary_diagnosis', 'age', 'gender', 'roi', 'fractions']].values[0]
+            clinical_data_row = np.append(clinical_data_row, longest_diameters[roi])
+            clinical_data_row = np.append(clinical_data_row, self.clinical_data.groupby(['subject_id', 'course']).size().get((subject_id, course), 0))
+            to_return.append(clinical_data_row)
             
         return to_return
 
@@ -328,230 +239,29 @@ class RawData_Reader():
         
         return cropped_arr
 
-    def __append_data__(self, subject_id, mrs, rtds, clinic_data, labels):
+    def __append_data__(self, subject_id, mrs, rtds, clinical_data, labels):
         for i in range(len(labels)):
             self.global_data['subject_id'].append(subject_id)
             self.global_data['mr'].append(np.float64(mrs[i]))
             self.global_data['rtd'].append(np.float64(rtds[i]))
-            self.global_data['clinic_data'].append(clinic_data[i])
-            self.global_data['label'].append(labels[i])
-
-    def __augment_train_set__(self):
-        print('Augmenting data...', end='\r')
-        i = 0
-        total_len = len(self.train_set['mr'])
-        while i < total_len:
-            if int(self.train_set['label'][i]) == 1:
-                mr, rtd = self.train_set['mr'][i], self.train_set['rtd'][i]
-                # augmented_mr = self.__rotate_image__(mr)
-                # augmented_rtd = self.__rotate_image__(rtd)
-                
-                # flip
-                augmented_mr = [torch.flip(mr, dims=[0]), torch.flip(mr, dims=[1]), torch.flip(mr, dims=[2])]
-                augmented_rtd = [torch.flip(rtd, dims=[0]), torch.flip(rtd, dims=[1]), torch.flip(rtd, dims=[2])]
-
-                augmented_label = [self.train_set['label'][i]] * len(augmented_mr)
-                augmented_clinic_data = [self.train_set['clinic_data'][i]] * len(augmented_mr)
-                
-                self.train_set['mr'].extend(augmented_mr)
-                self.train_set['rtd'].extend(augmented_rtd)
-                self.train_set['clinic_data'].extend(augmented_clinic_data)
-                self.train_set['label'] = torch.cat((self.train_set['label'], torch.tensor(augmented_label).to(torch.float32).view(-1, 1)), dim=0)
-                
-            i+=1
-
-    def __rotate_image__(self, image) -> dict:
-        rotated_images = []
-        axes = {'z':[0,1], 'x':[1, 2], 'y':[0,2]}
-        angles = [90, 180, 270]
-        
-        for axes_key in axes.keys():
-            for angle in angles:
-                k = angle // 90  # Number of 90-degree rotations
-                rotated_images.append(torch.rot90(image, k, axes[axes_key]))
-        
-        return rotated_images
+            self.global_data['clinical_data'].append(clinical_data[i])
+            self.global_data['label'].append(labels[i]) 
     
-    
-    
-    def __preprocess_clinic_data__(self):
-        for i, value in enumerate(self.global_data['clinic_data']):
-            self.global_data['clinic_data'][i][0] = process_mets(self.global_data['clinic_data'][i][0])
-            self.global_data['clinic_data'][i][1] = process_prim(self.global_data['clinic_data'][i][1])
-            self.global_data['clinic_data'][i][3] = self.global_data['clinic_data'][i][3].lower().strip()
-            self.global_data['clinic_data'][i][4] = process_roi(self.global_data['clinic_data'][i][4])
-    
-    def __discretize_categorical_features__(self):
-        self.global_data['label'] = np.array([1 if label == 'recurrence' else 0 for label in self.global_data['label']])
+    def __preprocess_clinical_data__(self):
+        for i, value in enumerate(self.global_data['clinical_data']):
+            self.global_data['clinical_data'][i][0] = process_mets(self.global_data['clinical_data'][i][0])
+            self.global_data['clinical_data'][i][1] = process_prim(self.global_data['clinical_data'][i][1])
+            self.global_data['clinical_data'][i][3] = self.global_data['clinical_data'][i][3].lower().strip()
+            self.global_data['clinical_data'][i][4] = process_roi(self.global_data['clinical_data'][i][4])
         
-        tmp = np.array(self.global_data['clinic_data'])
-        
-        for j in self.CLINIC_FEATURES_TO_DISCRETIZE:
-            tmp[:,j] = preprocessing.LabelEncoder().fit_transform(tmp[:,j])
-        
-        self.global_data['clinic_data'] = tmp.astype(np.int64)
-    
-    def __one_hot__(self):        
-        max_values = {}
-        for split in self.ALL_SPLITS:
-            for tensor in split['clinic_data']:
-                for j, feature in enumerate(tensor):
-                    if j in self.CLINIC_FEATURES_TO_DISCRETIZE:
-                        if j not in max_values:
-                            max_values[j] = int(feature)
-                        else:
-                            max_values[j] = max(max_values[j], int(feature))
-        
-        for split in self.ALL_SPLITS:
-            for i_tensor in range(len(split['clinic_data'])):
-                new_tensor = [split['clinic_data'][i_tensor][j] for j in self.CLINIC_FEATURES_TO_NORMALIZE if j in self.CLINIC_FEATURES_TO_KEEP]                
-                for j in self.CLINIC_FEATURES_TO_DISCRETIZE:
-                    if j in self.CLINIC_FEATURES_TO_KEEP:
-                        new_tensor.append(F.one_hot(split['clinic_data'][i_tensor][j].long(), num_classes=max_values[j]+1).float()[0])
-                split['clinic_data'][i_tensor] = torch.cat(new_tensor)
-                
-        print(f"\n\nLength of clinical features: {len(self.train_set['clinic_data'][-1])}\n\n")
-    
-    def __compute_statistics__(self, data):
-        statistics = {}
-                
-        for key in data.keys():
-            if key != 'label' and key != 'mr_rtd_fusion':
-                current_data = torch.cat([tensor.view(-1) for tensor in data[key]])
-                
-                if key == 'clinic_data':
-                    statistics[key] = {}
-                    for j in self.CLINIC_FEATURES_TO_NORMALIZE:
-                        selected_data = []
-                        
-                        for tensor in data[key]:
-                            selected_data.extend(tensor[self.CLINIC_FEATURES_TO_NORMALIZE].view(-1).tolist())  # Flatten and add to the list
-
-                        all_data = torch.tensor(selected_data)
-
-                        # Compute statistics
-                        statistics[key][j] = {
-                            'min': all_data.min().item(),
-                            'max': all_data.max().item(),
-                            'mean': all_data.mean().item(),
-                            'std': all_data.std().item()
-                        }
-                else:
-                    statistics[key] = {
-                        'min': current_data.min().item(),
-                        'max': current_data.max().item(),
-                        'mean': current_data.mean().item(),
-                        'std': current_data.std().item()
-                    }
-        
-        return statistics        
-    
-    def __minmax_scaling__(sample, statistics):
-        sample = (sample - statistics['min']) / (statistics['max'] - statistics['min'])
-        return sample
-        
-    def __z_norm__(sample, statistics):
-        sample = (sample - statistics['mean']) / statistics['std']
-        return sample
-    
-    def __normalize__(self, split, statistics, f):
-        for key in split.keys():
-            if key != 'label':
-                if key == 'clinic_data':
-                    for j in statistics[key].keys():
-                        for i_tensor in range(len(split[key])):
-                            split[key][i_tensor][j] = f(split[key][i_tensor][j], statistics[key][j])
-                else:
-                    for i_tensor in range(len(split[key])):
-                        split[key][i_tensor] = f(split[key][i_tensor], statistics[key])
-    
-    def __normalize_splits__(self, f = __minmax_scaling__):
-        statistics = self.__compute_statistics__(self.train_set)
-        
-        with open(os.path.join(self.OUTPUT_PROCESSED_DATA_FOLDER_PATH, 'statistics.pkl'), 'wb') as f_writer:
-            pickle.dump(statistics, f_writer)
-        
-        for split in self.ALL_SPLITS:
-            self.__normalize__(split, statistics, f)
-    
-    def __generate_split__(self):
-        self.__split_subjects__()
-        #final outputs 
-        self.train_set = {'mr': [], 'rtd': [], 'clinic_data': [], 'label': [], 'mr_rtd_fusion': []}
-        self.val_set = {'mr': [], 'rtd': [], 'clinic_data': [], 'label': [], 'mr_rtd_fusion': []}
-        self.test_set = {'mr': [], 'rtd': [], 'clinic_data': [], 'label': [], 'mr_rtd_fusion': []}
-        
-        for i, subject_id in enumerate(self.global_data['subject_id']):
-            target = None
-            
-            if subject_id in self.split_info['train']:
-                target = self.train_set                
-            if subject_id in self.split_info['test']:
-                target = self.test_set
-            elif subject_id in self.split_info['val']:
-                target = self.val_set
-            
-            target['label'].append(self.global_data['label'][i])
-            target['clinic_data'].append(torch.Tensor(self.global_data['clinic_data'][i]).to(torch.float32).view(-1, 1))
-            target['mr'].append(torch.Tensor(self.global_data['mr'][i]).to(torch.float32))
-            target['rtd'].append(torch.Tensor(self.global_data['rtd'][i]).to(torch.float32))
-            
-        self.ALL_SPLITS = [self.train_set, self.val_set, self.test_set]
-            
-        for split in self.ALL_SPLITS:
-            split['label'] = torch.tensor(split['label']).to(torch.float32).view(-1, 1)
-    
-    def __save__(self, raw = True):
+    def __save__(self):
         print('Saving data...', end='\r')
         
-        if raw:
-            target = self.OUTPUT_RAW_DATA_FOLDER_PATH
-            
-            with open(os.path.join(target, 'global_data90.pkl'), 'wb') as f:
-                pickle.dump(self.global_data, f)
-        else: 
-            target = self.OUTPUT_PROCESSED_DATA_FOLDER_PATH
-        
-            with open(os.path.join(target, 'train_set.pkl'), 'wb') as f:
-                pickle.dump(self.train_set, f)
-            
-            with open(os.path.join(target, 'test_set.pkl'), 'wb') as f:
-                pickle.dump(self.test_set, f) 
-                
-            with open(os.path.join(target, 'val_set.pkl'), 'wb') as f:
-                pickle.dump(self.val_set, f) 
-            
-    def __split_subjects__(self):
-        subjects_test   =   [ 427, 243, 257, 224, 420, 312, 316, 199, 219, 492, 332, 364, 132 ]
-        # old
-        # subjects_train  =   [ 463, 158, 247, 408, 234, 421, 431, 346, 487, 274, 338, 105, 293, 314, 227, 330, 391, 313, 270, 127, 324, 342, 121, 103, 114, 115, 151, 244, 245, 246, 467 ]
-        # subjects_val    =   [ 455, 152, 147]
-        
-        # new
-        subjects_train =      [ 103, 105, 114, 115, 121, 127, 147, 151, 158, 227, 234, 244, 245, 246, 247, 293, 313, 314, 324, 330, 342, 346, 391, 408, 421, 431, 455, 463, 467, 487 ]
-        subjects_val =        [ 152, 270, 274, 338 ]
-        
-        self.split_info = {
-            'train': subjects_train, 
-            'test': subjects_test,
-            'val': subjects_val
-        }
-
-    def __print_statistics__(self):
-        split_names = ['train', 'val', 'test']
-        for i, split in enumerate(self.ALL_SPLITS):
-            labels, counts = np.unique([x for x in split['label']], return_counts=True)
-            print(f'{split_names[i]}: {dict(zip(labels, counts))}')
-
+        target = self.OUTPUT_PROCESSED_DATA_FOLDER_PATH
+    
+        with open(os.path.join(target, 'global_data.pkl'), 'wb') as f:
+            pickle.dump(self.global_data, f)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--only_process', action='store_true')
-    args = parser.parse_args()
-    
     dr = RawData_Reader()
-    
-    if args.only_process:
-        dr.only_process()
-    else:
-        dr.full_run(cleanOutDir=False)
+    dr.full_run()
