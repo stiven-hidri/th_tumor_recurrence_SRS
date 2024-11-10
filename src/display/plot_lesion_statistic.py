@@ -2,7 +2,6 @@ import matplotlib.pyplot    as plt
 import numpy                as np
 import pickle
 import os
-from utils import clear_directory_content
 
 def display(plt, axes, images, cur_row, c):
     for i in range(c):

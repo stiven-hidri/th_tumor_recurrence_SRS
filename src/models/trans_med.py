@@ -6,71 +6,64 @@ import torch.nn.functional as F
 from einops import rearrange, reduce, repeat
 from einops.layers.torch import Rearrange, Reduce
 
-class ClassificationHead(nn.Module):
-    def __init__(self, emb_size: int = 512, n_classes: int = 1):       
-        super().__init__()
-        self.head = nn.Linear(emb_size, n_classes)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x[:, 0]  # Use only the cls token
-        x_head = self.head(x)
-        return x_head
-
+from models.mlp_cd import MlpCD
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, emb_size: int = 512, num_heads: int = 12, dropout: float = 0):
+    def __init__(self, emb_size: int = 512, num_heads: int = 8, dropout: float = 0):
         super().__init__()
         self.emb_size = emb_size
         self.num_heads = num_heads
-        # Using convolutions to replace linear projections
-        self.qkv = nn.Conv2d(emb_size, emb_size * 3, kernel_size=1)  # Kernel size 1 to simulate projection
+        # fuse the queries, keys and values in one matrix
+        self.qkv = nn.Linear(emb_size, emb_size * 3)
         self.att_drop = nn.Dropout(dropout)
-        self.projection = nn.Conv2d(emb_size, emb_size, kernel_size=1)
-
-    def forward(self, x: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
-        # split keys, queries, and values
+        self.projection = nn.Linear(emb_size, emb_size)
+        
+    def forward(self, x : torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
+        # split keys, queries and values in num_heads
         qkv = rearrange(self.qkv(x), "b n (h d qkv) -> (qkv) b h n d", h=self.num_heads, qkv=3)
         queries, keys, values = qkv[0], qkv[1], qkv[2]
-        # attention mechanism
-        energy = torch.einsum('bhqd, bhkd -> bhqk', queries, keys)  # batch, num_heads, query_len, key_len
+        # sum up over the last axis
+        energy = torch.einsum('bhqd, bhkd -> bhqk', queries, keys) # batch, num_heads, query_len, key_len
         if mask is not None:
             fill_value = torch.finfo(torch.float32).min
             energy.mask_fill(~mask, fill_value)
-        
+            
         scaling = self.emb_size ** (1/2)
         att = F.softmax(energy, dim=-1) / scaling
         att = self.att_drop(att)
-        # apply attention weights to values
-        out = torch.einsum('bhal, bhlv -> bhav', att, values)
+        # sum up over the third axis
+        out = torch.einsum('bhal, bhlv -> bhav ', att, values)
         out = rearrange(out, "b h n d -> b n (h d)")
         out = self.projection(out)
         return out
-
-
+    
 class ResidualAdd(nn.Module):
     def __init__(self, fn):
         super().__init__()
         self.fn = fn
-
+        
     def forward(self, x, **kwargs):
         res = x
         x = self.fn(x, **kwargs)
         x += res
         return x
-
-
+    
 class FeedForwardBlock(nn.Sequential):
-    def __init__(self, emb_size: int, expansion: int = 4, drop_p: float = 0.):
+    def __init__(self, emb_size: int, expansion: int = 4, drop_p: float = 0.1):
         super().__init__(
-            nn.Conv2d(emb_size, expansion * emb_size, kernel_size=1),  # 1x1 conv to expand features
+            nn.Linear(emb_size, expansion * emb_size),
             nn.GELU(),
             nn.Dropout(drop_p),
-            nn.Conv2d(expansion * emb_size, emb_size, kernel_size=1),  # 1x1 conv to reduce features
+            nn.Linear(expansion * emb_size, emb_size),
         )
-
-
+        
 class TransformerEncoderBlock(nn.Sequential):
-    def __init__(self, emb_size: int = 512, drop_p: float = 0., forward_expansion: int = 4, forward_drop_p: float = 0., **kwargs):
+    def __init__(self,
+                emb_size: int = 512,
+                drop_p: float = 0.1,
+                forward_expansion: int = 4,
+                forward_drop_p: float = 0.1,
+                ** kwargs):
         super().__init__(
             ResidualAdd(nn.Sequential(
                 nn.LayerNorm(emb_size),
@@ -79,74 +72,111 @@ class TransformerEncoderBlock(nn.Sequential):
             )),
             ResidualAdd(nn.Sequential(
                 nn.LayerNorm(emb_size),
-                FeedForwardBlock(
-                    emb_size, expansion=forward_expansion, drop_p=forward_drop_p),
+                FeedForwardBlock(emb_size, expansion=forward_expansion, drop_p=drop_p),
                 nn.Dropout(drop_p)
             )
             ))
-
 
 class TransformerEncoder(nn.Sequential):
     def __init__(self, depth: int = 12, **kwargs):
         super().__init__(*[TransformerEncoderBlock(**kwargs) for _ in range(depth)])
 
+class PatchEmbedding(nn.Module):
+    def __init__(self, patch_size: int = 2, emb_size: int = 512, depth_img:int=42, n_modalities:int=2, num_channels:int=3, use_clinical_data:bool=False, clinical_feat_dim:int=10):
+        self.patch_size = patch_size
+        super().__init__()
+        
+        self.emb_size = emb_size
+        self.patch_size = patch_size
+        self.use_clinical_data = use_clinical_data
+        
+        self.backbone = resnet34(pretrained=True)
+        self.backbone.fc = nn.Linear(self.backbone.fc.in_features, emb_size)  # Adjust final layer
+        
+        self.final_feat_dim = emb_size + clinical_feat_dim if use_clinical_data else emb_size
+        
+        self.cls_token = nn.Parameter(torch.randn(1, 1, self.final_feat_dim))
+        self.positions = nn.Parameter(torch.randn(n_modalities * depth_img * self.patch_size ** 2 // num_channels + 1, self.final_feat_dim))
+
+    def forward(self, input_transformer: torch.Tensor) -> torch.Tensor:
+        # Process MR and RTD through the patch embedding layers
+        
+        if self.use_clinical_data:
+            multimodal_image, clinical_feat = input_transformer
+        else:
+            multimodal_image = input_transformer
+        
+        batch_size = multimodal_image.shape[0]
+        
+        patch_sequence = rearrange(multimodal_image, 'b n c d h w -> b (n c d) h w')
+        patch_sequence = rearrange(patch_sequence, 'b (ncd ch3) h w -> b ncd ch3 h w', ch3=3)
+
+        if self.patch_size > 1:
+            patch_sequence = rearrange(patch_sequence, 'b d c (h p1) (w p2) -> b (d p1 p2) c h w', p1=self.patch_size, p2=self.patch_size)
+        
+        patch_sequence = rearrange(patch_sequence, "b l c h w -> (b l) c h w")
+
+        patch_embeddings = self.backbone(patch_sequence)
+        
+        patch_embeddings = rearrange(patch_embeddings, "(b l) f -> b l f", b=batch_size)
+        
+        if self.use_clinical_data:
+            clinical_feat = clinical_feat.unsqueeze(1).expand(-1, patch_embeddings.shape[1], -1)
+            patch_embeddings = torch.cat((patch_embeddings, clinical_feat), dim=-1)
+        
+        # Add the class token
+        cls_token = repeat(self.cls_token, '() l f -> b l f', b=batch_size)  # Shape: [batch_size, 1, emb_size]
+        x = torch.cat((cls_token, patch_embeddings), dim=1)  # Shape: [batch_size, num_patches + 1, emb_size]
+        
+        # Add positional embeddings
+        x += self.positions
+        
+        return x
 
 class DeiT(nn.Sequential):
-    def __init__(self, emb_size: int = 512, depth: int = 12, n_classes: int = 1, **kwargs):
+    def __init__(self, emb_size: int = 512, patch_size: int = 2, depth: int = 12, n_classes: int = 1, use_clinical_data=False, clinical_feat_dim=10, **kwargs):
+        self.final_feat_dim = emb_size + clinical_feat_dim if use_clinical_data else emb_size
+        self.final_num_heads = 9 if use_clinical_data else 8
         super().__init__(
-            TransformerEncoder(depth, emb_size=emb_size, **kwargs),
-            ClassificationHead(emb_size, n_classes)
+            PatchEmbedding(patch_size=patch_size, emb_size=emb_size, use_clinical_data=use_clinical_data),
+            TransformerEncoder(depth, emb_size=self.final_feat_dim, num_heads=self.final_num_heads, **kwargs)
         )
 
-
 class TransMedModel(nn.Module):
-    def __init__(self, patch_size=2):
+    def __init__(self, patch_size=1, emb_size=512, n_classes=1, use_clinical_data=False, clinical_feat_dim=10, dropout=.1):
         super(TransMedModel, self).__init__()
         
         # Define patch size
         self.patch_size = patch_size
+        self.use_clinical_data = use_clinical_data
         
-        # CNN Backbone for feature extraction (e.g., ResNet34)
-        self.cnn_backbone = resnet34(pretrained=True)
-        self.cnn_backbone.fc = nn.Identity()  # Remove final FC layer for feature output
+        self.transformer = DeiT(emb_size=512, patch_size=patch_size, depth=12, n_classes=1, drop_p=dropout, use_clinical_data=use_clinical_data)
         
-        self.transformer = DeiT()
+        if use_clinical_data:
+            self.cd_backbone = MlpCD(pretrained=True)
+            self.cd_backbone.final_fc = nn.Identity()
+            self.head = nn.Linear(emb_size+clinical_feat_dim, n_classes)
+        else:
+            self.head = nn.Linear(emb_size, n_classes)
         
-    def forward(self, mr, rtd):
-        # Process MR and RTD separately through the CNN
+    def forward(self, mr, rtd, clinical_data):
+        mr = mr[:, None, None, ...]
+        rtd = rtd[:, None, None, ...]
         
-        mr_features = self.process_input(mr)
-        rtd_features = self.process_input(rtd)
-        
-        # Combine MR and RTD features along a new modality dimension
-        combined_features = torch.cat((mr_features, rtd_features), dim=1)  # (batch_size, 2*num_patches, feature_dim)
-        
-        # Step 5: Transformer Encoder
-        transformer_output = self.transformer(combined_features)  # (batch_size, 2*num_patches, feature_dim)
-        
-        return transformer_output
+        multimodal_image = torch.cat((mr, rtd), dim=1)  # batch_size, modalities (2), channel (1), depth, height, width
+        input_transformer = F.pad(multimodal_image, (1, 1, 1, 1, 1, 1))
 
-    def process_input(self, x):
+        if self.use_clinical_data:
+            clinical_feat = self.cd_backbone(clinical_data)
+            input_transformer = (input_transformer, clinical_feat)
         
-        x = x.unsqueeze(1)
+        transformer_output = self.transformer(input_transformer)[:, 0]
         
-        # Step 1: Reshape to combine channel and depth
-        x = rearrange(x, 'b c d h w -> b (c d) h w')
         
-        # Step 2: Construct 3-channel images from adjacent slices
-        x = rearrange(x, 'b (d1 d2) h w -> b d1 3 h w', d2=3)
+        # if self.use_clinical_data:
+        #     clinical_feat = self.cd_backbone(clinical_data)
+        #     transformer_output = torch.cat((transformer_output, clinical_feat), dim=1)
         
-        # Step 3: Create patches of size patch_size x patch_size
-        x = rearrange(x, 'b c (h p1) (w p2) -> b (h w) c p1 p2', p1=self.patch_size, p2=self.patch_size)
+        out = self.head(transformer_output)
         
-        # Flatten patches to pass through CNN
-        b, num_patches, c, p1, p2 = x.shape
-        x = x.view(b * num_patches, c, p1, p2)
-        
-        # Step 4: Pass patches through CNN backbone
-        features = self.cnn_backbone(x)  # Output: (b*num_patches, feature_dim)
-        
-        # Reshape to (batch_size, num_patches, feature_dim) for Transformer input
-        features = features.view(b, num_patches, -1)
-        
-        return features
+        return out

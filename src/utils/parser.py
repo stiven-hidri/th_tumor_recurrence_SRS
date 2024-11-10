@@ -33,6 +33,8 @@ class Parser:
         self.parser.add_argument('--p_augmentation', type=float, help='Probability to augment', dest='P_AUGMENTATION')
         self.parser.add_argument('--p_augmentation_per_technique', type=float, help='Probability to apply each technique', dest='P_AUGMENTATION_PER_TECHNIQUE')
         self.parser.add_argument('--keep_test', default=False, action='store_true', help='Probability to apply each technique', dest='KEEP_TEST')
+        self.parser.add_argument('--k', default=6, type=int, help='K-folds', dest='K')
+        self.parser.add_argument('--majority_vote', default=False, action='store_true', help='Majority vote', dest='MAJORITY_VOTE')
 
         # Logger args
         self.parser.add_argument('--experiment_name', type=str, help='Experiment name', dest='EXPERIMENT_NAME')
@@ -121,5 +123,11 @@ class Parser:
             
         if self.args.KEEP_TEST is not None:
             config.logger.keep_test = self.args.KEEP_TEST
+            
+        if self.args.K is not None:
+            config.logger.k = self.args.K
+            
+        if self.args.MAJORITY_VOTE is not None:
+            config.logger.majority_vote = self.args.MAJORITY_VOTE
 
         return config, device

@@ -1,6 +1,6 @@
 from models.base_model import BaseModel
 from models.conv_rnn import ConvRNN
-from models.conv_lstm import ConvLongLSTM
+from models.conv_lstm import ConvLSTM
 from models.mlp_cd import MlpCD
 from models.base_model_enhancedV2 import BaseModel_EnhancedV2
 from models.wdt_conv import WDTConv

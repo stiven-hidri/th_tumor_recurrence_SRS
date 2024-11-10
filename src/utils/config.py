@@ -37,6 +37,8 @@ class LoggerConfig(BaseModel):
     experiment_name: str
     version: int
     keep_test: Optional[bool] = False
+    k: Optional[int] = 6
+    majority_vote: Optional[bool] = False
 
 class CheckpointConfig(BaseModel):
     monitor: str

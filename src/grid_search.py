@@ -52,7 +52,6 @@ model_parameters_toshow = [
     "dropout",
     "use_clinical_data",
     "gamma_fl",
-    "pos_weight",
     "p_augmentation",
 ]
 
@@ -140,7 +139,7 @@ def calculate_mean_statistics(statistics):
         
     return mean_statistics
     
-def cross_validate_only_training_set(list_train, list_val, test_set, config, param_set, version):
+def cross_validate_only_training_set(list_train, list_val, test_set, config, param_set, version, majority_vote):
     # Define test dataloader if external test set is available
     
     batch_size = param_set['batch_size']
@@ -165,7 +164,7 @@ def cross_validate_only_training_set(list_train, list_val, test_set, config, par
         val_dataloader = DataLoader(val_set, batch_size=batch_size, num_workers=4, persistent_workers=True)
 
         # Logger for each experiment
-        logger = TensorBoardLogger(save_dir=config.logger.log_dir, version=version, name=config.logger.experiment_name)
+        logger = TensorBoardLogger(save_dir=config.logger.log_dir, version=f"version_{version}_fold_{fold}", name=config.logger.experiment_name)
         
         param_set['experiment_name'] = config.logger.experiment_name
         param_set['version'] = version
@@ -178,7 +177,7 @@ def cross_validate_only_training_set(list_train, list_val, test_set, config, par
         # Checkpoint callback
         checkpoint_cb = ModelCheckpoint(monitor=config.checkpoint.monitor, dirpath=os.path.join(config.logger.log_dir, config.logger.experiment_name, f'version_{version}_fold_{fold}'), filename='{epoch:03d}_{' + config.checkpoint.monitor + ':.6f}', save_weights_only=True, save_top_k=config.checkpoint.save_top_k, mode=config.checkpoint.mode)
         
-        early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.001, patience=3, verbose=False, mode="min")
+        early_stop_callback = EarlyStopping(monitor="val_F1", min_delta=0.001, patience=5, verbose=False, mode="min")
 
         # Trainer
         trainer = Trainer(logger=logger, accelerator=device, devices=[0] if device == "gpu" else "auto", default_root_dir=config.logger.log_dir, max_epochs=config.model.epochs, check_val_every_n_epoch=1, callbacks=[checkpoint_cb, early_stop_callback], log_every_n_steps=1, num_sanity_val_steps=0,reload_dataloaders_every_n_epochs=1)
@@ -215,12 +214,19 @@ def cross_validate_only_training_set(list_train, list_val, test_set, config, par
     
     final_val_statistics = calculate_mean_statistics(val_statistics)
     
-    for sample_idx, preds in test_predictions.items():
-        test_predictions[sample_idx] = [1 if p > final_t else 0 for p in preds]
-    
-    for sample_idx, preds in test_predictions.items():
-        majority_vote = Counter(preds).most_common(1)[0][0]  # Majority vote
-        final_predictions.append(majority_vote)
+    if majority_vote:
+        for sample_idx, preds in test_predictions.items():
+            test_predictions[sample_idx] = [1 if p > final_t else 0 for p in preds]
+        
+        for sample_idx, preds in test_predictions.items():
+            majority_vote = Counter(preds).most_common(1)[0][0]  # Majority vote
+            final_predictions.append(majority_vote)
+    else:
+        averaged_predictions = []
+        for sample_idx, preds in test_predictions.items():
+            averaged_predictions.append(np.mean(preds))
+            
+        final_predictions = [1 if p > final_t else 0 for p in averaged_predictions]
         
     statistics = calculate_statistics(final_predictions, test_labels)
 
@@ -262,13 +268,15 @@ if __name__ == '__main__':
         raise NotImplementedError("Model not implemented")
     
     keep_test = config.logger.keep_test
+    k = config.logger.k
+    majority_vote = config.logger.majority_vote
     
     # Generate all parameter combinations
     keys, values = zip(*param_grid.items())
     all_param_combinations = [dict(zip(keys, v)) for v in product(*values)]
     
     # Load sources and create datasets
-    classifier_dataset = ClassifierDataset(model_name=config.model.name, keep_test=keep_test)
+    classifier_dataset = ClassifierDataset(model_name=config.model.name, keep_test=keep_test, k=k)
     
     for i, param_set in enumerate(all_param_combinations):
         print(f"**********\n{i+1}/{len(all_param_combinations)}:\n**********")
@@ -281,7 +289,7 @@ if __name__ == '__main__':
         list_train, list_val, test_set = classifier_dataset.create_splits(p_augmentation=p_augmentation, augmentation_techniques=[])
         
         if keep_test:
-            result_dict = cross_validate_only_training_set(list_train, list_val, test_set, config, param_set, version)
+            result_dict = cross_validate_only_training_set(list_train, list_val, test_set, config, param_set, version, majority_vote)
         else:
             result_dict = cross_validate_whole_dataset(list_train, list_val, config, param_set, version)
             

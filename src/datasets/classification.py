@@ -4,6 +4,7 @@ import pywt
 from torch.utils.data import Dataset
 from utils.augment import combine_aug
 from torchvision import transforms
+import numpy as np
 from sklearn.model_selection import StratifiedGroupKFold
 import numpy as np
 import torch
@@ -47,9 +48,10 @@ class ClassifierDatasetSplit(Dataset):
             yield self.__getitem__(i)
 
 class ClassifierDataset(Dataset):
-    def __init__(self, model_name:str, keep_test:bool):
+    def __init__(self, model_name:str, keep_test:bool, k:int):
         super().__init__()
         self.model_name = model_name
+        self.k = k
         self.keep_test = keep_test
         self.DATA_PATH = os.path.join(os.path.dirname(__file__), '..','..', 'data', 'processed')
         self.CLINIC_FEATURES_TO_DISCRETIZE = [0, 1, 3, 4]
@@ -87,9 +89,8 @@ class ClassifierDataset(Dataset):
             if int(split['label'][i]) == 1:
                 mr, rtd, mr_rtd_fusion = split['mr'][i], split['rtd'][i], split['mr_rtd_fusion'][i]
                 
-                # flip
-                augmented_mr = [torch.flip(mr, dims=[0]), torch.flip(mr, dims=[1]), torch.flip(mr, dims=[2])]
-                augmented_rtd = [torch.flip(rtd, dims=[0]), torch.flip(rtd, dims=[1]), torch.flip(rtd, dims=[2])]
+                augmented_mr = [ torch.flip(mr, dims=[0]), torch.flip(mr, dims=[1]), torch.flip(mr, dims=[2]) ] 
+                augmented_rtd = [ torch.flip(rtd, dims=[0]), torch.flip(rtd, dims=[1]), torch.flip(rtd, dims=[2]) ] 
                 augmented_mr_rtd_fusion = [torch.flip(mr_rtd_fusion, dims=[0]), torch.flip(mr_rtd_fusion, dims=[1]), torch.flip(mr_rtd_fusion, dims=[2])]
 
                 augmented_label = [split['label'][i]] * len(augmented_mr)
@@ -98,9 +99,12 @@ class ClassifierDataset(Dataset):
                 split['mr'].extend(augmented_mr)
                 split['rtd'].extend(augmented_rtd)
                 split['mr_rtd_fusion'].extend(augmented_mr_rtd_fusion)
+                
                 split['clinical_data'].extend(augmented_clinical_data)
                 split['label'] = torch.cat((split['label'], torch.tensor(augmented_label).to(torch.float32).view(-1, 1)), dim=0)
                 
+
+            
             i+=1
             
         return split
@@ -254,7 +258,7 @@ class ClassifierDataset(Dataset):
 
     def __pad_resize_images__(self, global_data, desired_shape=(40, 40, 40)):        
         keys = ['mr', 'rtd']
-        for i in range(len(global_data)):
+        for i in range(len(global_data['mr'])):
             for k in keys:
                 image = global_data[k][i]
                 
@@ -289,9 +293,6 @@ class ClassifierDataset(Dataset):
         else: 
             subjects_test = []
             
-        global_data['clinical_data'] = global_data['clinic_data']
-        del global_data['clinic_data']
-            
         global_data = self.__pad_resize_images__(global_data)
             
         global_data = self.__discretize_categorical_features__(global_data)
@@ -307,7 +308,7 @@ class ClassifierDataset(Dataset):
         list_train, list_val = [], []
         test = None
 
-        n_splits = 5
+        n_splits = self.k
         skf = StratifiedGroupKFold(n_splits=n_splits)
         
         if self.keep_test:
@@ -355,7 +356,7 @@ class ClassifierDataset(Dataset):
             train_set = self.__one_hot__(train_set, max_values)
             val_set = self.__one_hot__(val_set, max_values)
             
-            train_set = self.__augment_by_flipping__(train_set)
+            # train_set = self.__augment_by_flipping__(train_set)
             
             list_train.append(train_set)
             list_val.append(val_set)

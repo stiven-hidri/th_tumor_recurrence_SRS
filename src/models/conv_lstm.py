@@ -99,26 +99,5 @@ class ConvLSTM(nn.Module):
         output = self.fc(lstm_output[:, -1, :])
 
         return output
-    
-    # def forward(self, mr, rtd, clinical_data):
-        
-    #     batch_size, depth, height, width = mr.shape
-    #     channels = 2
-        
-    #     combined = torch.stack([mr, rtd], dim=2).view(-1, channels, height, width)
-
-    #     features = self.backbone(combined).view(batch_size, depth, -1)
-        
-    #     if self.use_clinical_data:
-    #         features_clinical_data = torch.relu(self.cd_backbone(clinical_data)).unsqueeze(1).repeat(1, depth, 1)
-    #         final_features = torch.cat((features, features_clinical_data), dim=-1)
-    #     else:
-    #         final_features = features
-
-    #     lstm_out = self.layer_norm(self.lstm(final_features))
-
-    #     output = self.fc(lstm_out[:, -1, :])
-
-    #     return output
 
 

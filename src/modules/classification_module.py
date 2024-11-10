@@ -26,7 +26,7 @@ class ClassificationModule(LightningModule):
         if name == 'base_model_enhancedV2':
             self.model = BaseModel_EnhancedV2(dropout=dropout, use_clinical_data=use_clinical_data)
         elif name == 'trans_med':
-            self.model = TransMedModel()
+            self.model = TransMedModel(use_clinical_data=use_clinical_data, dropout=dropout)
         elif name == 'wdt_conv':
             self.model = WDTConv(dropout=dropout, use_clinical_data=use_clinical_data)
         elif name == 'base_model':
@@ -69,6 +69,7 @@ class ClassificationModule(LightningModule):
             
         self.validation_labels = []
         self.validation_losses = []
+        self.validation_f1 = []
         self.validation_outputs = []
         self.validation_best_threshold = .5
         self.best_validation_statistics = {}
@@ -175,6 +176,8 @@ class ClassificationModule(LightningModule):
         self.best_validation_statistics = statistics[0]
         
         self.validation_best_threshold = thresholds[0]
+        
+        self.log('val_F1', statistics[0]['f1_score'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
     
     def predict_step(self, batch, batch_idx):
         if self.name == 'wdt_conv':
@@ -201,7 +204,7 @@ class ClassificationModule(LightningModule):
         
         elif self.optimizer == 'sgd':
             print("Using SGD optimizer")
-            optimizers = torch.optim.SGD(self.parameters(), lr = self.lr, momentum=.7, weight_decay=self.weight_decay)
+            optimizers = torch.optim.SGD(self.parameters(), lr = self.lr, momentum=.5, weight_decay=self.weight_decay)
             
         ##Schedulers
         

@@ -1,9 +1,9 @@
 dataset:
   name: name
 model:
-  name: wdt_conv
+  name: trans_med
   epochs: 100
-  batch_size: 32
+  batch_size: 4
   optimizer: sgd
   scheduler: plateau
   rnn_type: None
