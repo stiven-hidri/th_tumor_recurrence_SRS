@@ -39,11 +39,11 @@ param_grid_wdt = {
 }
 
 param_grid_transmed = {
-    'lr':                   [ 1e-4],
+    'lr':                   [ 5e-3],
     'batch_size':           [ 2 ],
     'dropout':              [ .2 ],
-    'weight_decay':         [ 5e-4 ],
-    'p_augmentation':       [ .3, .5 ],
-    'gamma_fl':             [ 2 ],
+    'weight_decay':         [ 1e-2 ],
+    'p_augmentation':       [ .8 ],
+    'gamma_fl':             [ 3 ],
     'use_clinical_data':    [ True, False ]   
 }

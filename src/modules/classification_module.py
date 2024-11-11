@@ -204,7 +204,7 @@ class ClassificationModule(LightningModule):
         
         elif self.optimizer == 'sgd':
             print("Using SGD optimizer")
-            optimizers = torch.optim.SGD(self.parameters(), lr = self.lr, momentum=.5, weight_decay=self.weight_decay)
+            optimizers = torch.optim.SGD(self.parameters(), lr = self.lr, momentum=.7, weight_decay=self.weight_decay)
             
         ##Schedulers
         

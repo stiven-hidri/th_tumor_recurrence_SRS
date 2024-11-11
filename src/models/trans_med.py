@@ -134,12 +134,11 @@ class PatchEmbedding(nn.Module):
         return x
 
 class DeiT(nn.Sequential):
-    def __init__(self, emb_size: int = 512, patch_size: int = 2, depth: int = 12, n_classes: int = 1, use_clinical_data=False, clinical_feat_dim=10, **kwargs):
+    def __init__(self, emb_size: int = 512, depth_img: int = 90, patch_size: int = 2, depth: int = 12, num_heads: int = 8, n_classes: int = 1, use_clinical_data=False, clinical_feat_dim=10, **kwargs):
         self.final_feat_dim = emb_size + clinical_feat_dim if use_clinical_data else emb_size
-        self.final_num_heads = 9 if use_clinical_data else 8
         super().__init__(
-            PatchEmbedding(patch_size=patch_size, emb_size=emb_size, use_clinical_data=use_clinical_data),
-            TransformerEncoder(depth, emb_size=self.final_feat_dim, num_heads=self.final_num_heads, **kwargs)
+            PatchEmbedding(depth_img=90, patch_size=patch_size, emb_size=emb_size, use_clinical_data=use_clinical_data),
+            TransformerEncoder(depth, emb_size=self.final_feat_dim, num_heads=num_heads, **kwargs)
         )
 
 class TransMedModel(nn.Module):
@@ -149,8 +148,9 @@ class TransMedModel(nn.Module):
         # Define patch size
         self.patch_size = patch_size
         self.use_clinical_data = use_clinical_data
+        self.final_num_heads = 9 if use_clinical_data else 8
         
-        self.transformer = DeiT(emb_size=512, patch_size=patch_size, depth=12, n_classes=1, drop_p=dropout, use_clinical_data=use_clinical_data)
+        self.transformer = DeiT(emb_size=512, patch_size=patch_size, depth_img=90, depth=12, num_heads=self.final_num_heads, n_classes=1, drop_p=dropout, use_clinical_data=use_clinical_data)
         
         if use_clinical_data:
             self.cd_backbone = MlpCD(pretrained=True)
@@ -164,7 +164,11 @@ class TransMedModel(nn.Module):
         rtd = rtd[:, None, None, ...]
         
         multimodal_image = torch.cat((mr, rtd), dim=1)  # batch_size, modalities (2), channel (1), depth, height, width
-        input_transformer = F.pad(multimodal_image, (1, 1, 1, 1, 1, 1))
+        
+        input_transformer = multimodal_image
+        
+        if self.patch_size > 1:
+            input_transformer = F.pad(input_transformer, (1, 1, 1, 1, 1, 1))
 
         if self.use_clinical_data:
             clinical_feat = self.cd_backbone(clinical_data)

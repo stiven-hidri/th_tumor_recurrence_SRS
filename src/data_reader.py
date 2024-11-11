@@ -201,22 +201,22 @@ class RawData_Reader():
     def __mask_and_crop__(self, rois, mr, rtd, masks):
         mr_return, rtd_return = [], []
         
-        for roi in rois:
-            mr_masked = masks[roi] * mr
-            rtd_masked = masks[roi] * rtd
-            
-            mr_masked_cropped = self.__crop_les__(mr_masked)
-            rtd_masked_cropped = self.__crop_les__(rtd_masked)
+        for roi in rois:            
+            mr_masked_cropped = self.__crop_les__(mr, masks[roi])
+            rtd_masked_cropped = self.__crop_les__(rtd, masks[roi])
             
             mr_return.append(mr_masked_cropped)
             rtd_return.append(rtd_masked_cropped)
         
         return mr_return, rtd_return
     
-    def __crop_les__(self, image):
-        true_points = np.argwhere(image)
-        top_left = true_points.min(axis=0)
-        bottom_right = true_points.max(axis=0)
+    def __crop_les__(self, image, mask):
+        true_points = np.argwhere(mask)
+        
+        top_left = true_points.min(axis=0) - 5 
+        
+        bottom_right = true_points.max(axis=0) + 5
+        
         cropped_arr = image[top_left[0]:bottom_right[0]+1, top_left[1]:bottom_right[1]+1, top_left[2]:bottom_right[2]+1]
         
         return cropped_arr
