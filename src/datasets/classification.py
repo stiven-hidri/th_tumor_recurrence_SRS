@@ -48,16 +48,22 @@ class ClassifierDatasetSplit(Dataset):
             yield self.__getitem__(i)
 
 class ClassifierDataset(Dataset):
-    def __init__(self, model_name:str, keep_test:bool, k:int):
+    def __init__(self, model_name:str):
         super().__init__()
         self.model_name = model_name
-        self.k = k
-        self.keep_test = keep_test
+        
         self.DATA_PATH = os.path.join(os.path.dirname(__file__), '..','..', 'data', 'processed')
+        
         self.CLINIC_FEATURES_TO_DISCRETIZE = [0, 1, 3, 4]
         self.CLINIC_FEATURES_TO_NORMALIZE = [2, 5, 6, 7]
         self.CLINIC_FEATURES_TO_KEEP = [0, 1, 2, 3, 4, 6, 7]
-        self.list_train, self.list_val, self.test_set = self.__load__()
+        
+        self.ORIGINAL_TEST_SET = [ 427, 243, 257, 224, 420, 312, 316, 199, 219, 492, 332, 364, 132 ]
+        
+        self.global_data = None
+        self.max_values = None
+        
+        self.__load__()
 
     def __len__(self):
         return len(self.train['label'])
@@ -78,6 +84,7 @@ class ClassifierDataset(Dataset):
                 fused_details_e[key] = np.where(energy1 > energy2, coeffs_mr[key], coeffs_rtd[key])
 
         fused_image_e = pywt.idwtn(fused_details_e, 'db1', axes=(0, 1, 2))
+        
         fused_image_e = torch.Tensor(fused_image_e).to(torch.float32) * ( mr > 0 )
         return fused_image_e
 
@@ -92,7 +99,8 @@ class ClassifierDataset(Dataset):
                 augmented_mr = [ torch.flip(mr, dims=[0]), torch.flip(mr, dims=[1]), torch.flip(mr, dims=[2]) ] 
                 augmented_rtd = [ torch.flip(rtd, dims=[0]), torch.flip(rtd, dims=[1]), torch.flip(rtd, dims=[2]) ] 
                 augmented_mr_rtd_fusion = [torch.flip(mr_rtd_fusion, dims=[0]), torch.flip(mr_rtd_fusion, dims=[1]), torch.flip(mr_rtd_fusion, dims=[2])]
-
+                
+                augmemted_subject_id = [split['subject_id'][i]] * len(augmented_mr)
                 augmented_label = [split['label'][i]] * len(augmented_mr)
                 augmented_clinical_data = [split['clinical_data'][i]] * len(augmented_mr)
                 
@@ -100,6 +108,7 @@ class ClassifierDataset(Dataset):
                 split['rtd'].extend(augmented_rtd)
                 split['mr_rtd_fusion'].extend(augmented_mr_rtd_fusion)
                 
+                split['subject_id'].extend(augmemted_subject_id)
                 split['clinical_data'].extend(augmented_clinical_data)
                 split['label'] = torch.cat((split['label'], torch.tensor(augmented_label).to(torch.float32).view(-1, 1)), dim=0)
                 
@@ -142,7 +151,7 @@ class ClassifierDataset(Dataset):
     
     def __normalize__(self, split, statistics, f):
         for key in split.keys():
-            if key != 'label' and key != 'mr_rtd_fusion':
+            if key != 'label' and key != 'mr_rtd_fusion' and key != 'subject_id':
                 if key == 'clinical_data':
                     for j in statistics[key].keys():
                         for i_tensor in range(len(split[key])):
@@ -157,7 +166,7 @@ class ClassifierDataset(Dataset):
         statistics = {}
                 
         for key in data.keys():
-            if key != 'label' and key != 'mr_rtd_fusion':
+            if key != 'label' and key != 'mr_rtd_fusion' and key != 'subject_id':
                 current_data = torch.cat([tensor.view(-1) for tensor in data[key]])
                 
                 if key == 'clinical_data':
@@ -286,66 +295,52 @@ class ClassifierDataset(Dataset):
 
     def __load__(self) -> None:
         with open(os.path.join(self.DATA_PATH, 'global_data.pkl'), 'rb') as f:
-            global_data = pickle.load(f)
+            self.global_data = pickle.load(f)
             
-        if self.keep_test:
-            subjects_test = [ 427, 243, 257, 224, 420, 312, 316, 199, 219, 492, 332, 364, 132 ]
-        else: 
-            subjects_test = []
-            
-        global_data = self.__pad_resize_images__(global_data)
-            
-        global_data = self.__discretize_categorical_features__(global_data)
-        
-        max_values = self.__get_max_values__(global_data['clinical_data'])
-            
-        subjects = global_data['subject_id']
-        mr = [torch.Tensor(e).to(torch.float32) for e in global_data['mr']]
-        rtd = [torch.Tensor(e).to(torch.float32) for e in global_data['rtd']]
-        clinical_data = [torch.Tensor(e).to(torch.float32).view(-1, 1) for e in global_data['clinical_data']]
-        labels = global_data['label']
+        self.global_data = self.__pad_resize_images__(self.global_data)
+        self.global_data = self.__discretize_categorical_features__(self.global_data)
+        self.max_values = self.__get_max_values__(self.global_data['clinical_data'])
+    
+    def return_data_dictionary(self, mr, rtd, clinical_data, labels, subjects, idx):
+        data_dictionary = {
+            "mr": [torch.Tensor(mr[i]).to(torch.float32) for i in idx],
+            "rtd": [torch.Tensor(rtd[i]).to(torch.float32) for i in idx],
+            "mr_rtd_fusion": [self.__wdt_fusion__(mr[i], rtd[i]) for i in idx],
+            "clinical_data": [torch.Tensor(clinical_data[i]).to(torch.float32).view(-1, 1) for i in idx],
+            'label': torch.tensor([labels[i] for i in idx]).to(torch.float32).view(-1, 1),
+            'subject_id': [subjects[i] for i in idx]
+        }
+        return data_dictionary
+    
+    def create_split_keep_test(self, p_augmentation:float, augmentation_techniques:list, k:int):
+        subjects = self.global_data['subject_id']
+        mr = [torch.Tensor(e).to(torch.float32) for e in self.global_data['mr']]
+        rtd = [torch.Tensor(e).to(torch.float32) for e in self.global_data['rtd']]
+        clinical_data = [torch.Tensor(e).to(torch.float32).view(-1, 1) for e in self.global_data['clinical_data']]
+        labels = self.global_data['label']
             
         list_train, list_val = [], []
-        test = None
 
-        n_splits = self.k
+        n_splits = k
+        
         skf = StratifiedGroupKFold(n_splits=n_splits)
         
-        if self.keep_test:
-            test_idx = [i for i in range(len(mr)) if subjects[i] in subjects_test]
-            test_set = {
-                "mr": [torch.Tensor(mr[i]).to(torch.float32) for i in test_idx],
-                "rtd": [torch.Tensor(rtd[i]).to(torch.float32) for i in test_idx],
-                "mr_rtd_fusion": [self.__wdt_fusion__(mr[i], rtd[i]) for i in test_idx],
-                "clinical_data": [torch.Tensor(clinical_data[i]).to(torch.float32).view(-1, 1) for i in test_idx],
-                'label': torch.tensor([labels[i] for i in test_idx]).to(torch.float32).view(-1, 1),
-            }
-            
-            mr = [ mr[idx] for idx in range(len(mr)) if idx not in test_idx]
-            rtd = [ rtd[idx] for idx in range(len(rtd)) if idx not in test_idx]
-            labels = [ labels[idx] for idx in range(len(labels)) if idx not in test_idx]
-            subjects = [ subjects[idx] for idx in range(len(subjects)) if idx not in test_idx]
-            clinical_data = [ clinical_data[idx] for idx in range(len(clinical_data)) if idx not in test_idx]
+        test_idx = [i for i in range(len(mr)) if subjects[i] in self.ORIGINAL_TEST_SET]
+        
+        test_set = self.return_data_dictionary(mr, rtd, clinical_data, labels, subjects, test_idx)
+        
+        mr = [ mr[idx] for idx in range(len(mr)) if idx not in test_idx]
+        rtd = [ rtd[idx] for idx in range(len(rtd)) if idx not in test_idx]
+        labels = [ labels[idx] for idx in range(len(labels)) if idx not in test_idx]
+        subjects = [ subjects[idx] for idx in range(len(subjects)) if idx not in test_idx]
+        clinical_data = [ clinical_data[idx] for idx in range(len(clinical_data)) if idx not in test_idx]
         
         all_statistics = []
         
         for fold, (train_idx, val_idx) in enumerate(skf.split(mr, labels, subjects)):
             
-            train_set = {
-                "mr": [torch.Tensor(mr[i]).to(torch.float32) for i in train_idx],
-                "rtd": [torch.Tensor(rtd[i]).to(torch.float32) for i in train_idx],
-                "mr_rtd_fusion": [self.__wdt_fusion__(mr[i], rtd[i]) for i in train_idx],
-                "clinical_data": [torch.Tensor(clinical_data[i]).to(torch.float32).view(-1, 1) for i in train_idx],
-                'label': torch.tensor([e for i, e in enumerate(labels) if i in train_idx]).to(torch.float32).view(-1, 1)
-            }
-
-            val_set = {
-                "mr": [torch.Tensor(mr[i]).to(torch.float32) for i in val_idx],
-                "rtd": [torch.Tensor(rtd[i]).to(torch.float32) for i in val_idx],
-                "mr_rtd_fusion": [self.__wdt_fusion__(mr[i], rtd[i]) for i in val_idx],
-                "clinical_data": [torch.Tensor(clinical_data[i]).to(torch.float32).view(-1, 1) for i in val_idx],
-                'label': torch.tensor([labels[i] for i in val_idx]).to(torch.float32).view(-1, 1)
-            }
+            train_set = self.return_data_dictionary(mr, rtd, clinical_data, labels, subjects, train_idx)
+            val_set = self.return_data_dictionary(mr, rtd, clinical_data, labels, subjects, val_idx)
             
             statistics = self.__compute_statistics__(train_set)
             all_statistics.append(statistics)
@@ -353,27 +348,73 @@ class ClassifierDataset(Dataset):
             train_set = self.__normalize__(train_set, statistics, f=self.__minmax_scaling__)
             val_set = self.__normalize__(val_set, statistics, f=self.__minmax_scaling__)
             
-            train_set = self.__one_hot__(train_set, max_values)
-            val_set = self.__one_hot__(val_set, max_values)
+            train_set = self.__one_hot__(train_set, self.max_values)
+            val_set = self.__one_hot__(val_set, self.max_values)
             
             # train_set = self.__augment_by_flipping__(train_set)
             
             list_train.append(train_set)
             list_val.append(val_set)
             
-        if self.keep_test:
-            averaged_statistics = self.__average_statistics__(all_statistics)
-            test_set = self.__normalize__(test_set, averaged_statistics, f=self.__minmax_scaling__)
-            test_set = self.__one_hot__(test_set, max_values)
-            
-        return list_train, list_val, test_set
-    
-    def create_splits(self, p_augmentation:float, augmentation_techniques:list):
-        split = [ [], [], ClassifierDatasetSplit(model_name=self.model_name, data=self.test_set, split_name="test") ]
+        averaged_statistics = self.__average_statistics__(all_statistics)
         
-        for i in range (len(self.list_train)):
-            split[0].append(ClassifierDatasetSplit(model_name=self.model_name, data=self.list_train[i], split_name='train', p_augmentation=p_augmentation, augmentation_techniques=augmentation_techniques))
-            split[1].append(ClassifierDatasetSplit(model_name=self.model_name, data=self.list_val[i], split_name="val" if self.keep_test else "test"))
+        test_set = self.__normalize__(test_set, averaged_statistics, f=self.__minmax_scaling__)
+        test_set = self.__one_hot__(test_set, self.max_values)
+        
+        split = [ [], [], ClassifierDatasetSplit(model_name=self.model_name, data=test_set, split_name="test") ]
+        
+        for i in range (len(list_train)):
+            split[0].append(ClassifierDatasetSplit(model_name=self.model_name, data=list_train[i], split_name='train', p_augmentation=p_augmentation, augmentation_techniques=augmentation_techniques))
+            split[1].append(ClassifierDatasetSplit(model_name=self.model_name, data=list_val[i], split_name="val"))
         
         return split
     
+    def create_split_whole_dataset(self, p_augmentation:float, augmentation_techniques:list, k:int):
+        subjects = self.global_data['subject_id']
+        mr = [torch.Tensor(e).to(torch.float32) for e in self.global_data['mr']]
+        rtd = [torch.Tensor(e).to(torch.float32) for e in self.global_data['rtd']]
+        clinical_data = [torch.Tensor(e).to(torch.float32).view(-1, 1) for e in self.global_data['clinical_data']]
+        labels = self.global_data['label']
+            
+        list_train, list_val, list_test = [], [], []
+
+        n_splits = k
+        skf = StratifiedGroupKFold(n_splits=n_splits)
+        
+        for fold, (train_idx, test_idx) in enumerate(skf.split(mr, labels, subjects)):
+            
+            train_outer = self.return_data_dictionary(mr, rtd, clinical_data, labels, subjects, train_idx)
+            test_set = self.return_data_dictionary(mr, rtd, clinical_data, labels, subjects, test_idx)
+            
+            inner_cv = StratifiedGroupKFold(n_splits=5)
+    
+            # Use the first split as the train/validation division
+            inner_train_idx, val_idx = next(inner_cv.split(train_outer['mr'], train_outer['label'], train_outer['subject_id']))
+            
+            val_set = self.return_data_dictionary(train_outer['mr'], train_outer['rtd'], train_outer['clinical_data'], train_outer['label'], train_outer['subject_id'], val_idx)
+            train_set = self.return_data_dictionary(train_outer['mr'], train_outer['rtd'], train_outer['clinical_data'], train_outer['label'], train_outer['subject_id'], inner_train_idx)
+            
+            statistics = self.__compute_statistics__(train_set)
+            
+            train_set = self.__normalize__(train_set, statistics, f=self.__minmax_scaling__)
+            val_set = self.__normalize__(val_set, statistics, f=self.__minmax_scaling__)
+            test_set = self.__normalize__(test_set, statistics, f=self.__minmax_scaling__)
+            
+            train_set = self.__one_hot__(train_set, self.max_values)
+            val_set = self.__one_hot__(val_set, self.max_values)
+            test_set = self.__one_hot__(val_set, self.max_values)
+            
+            # train_set = self.__augment_by_flipping__(train_set)
+            
+            list_train.append(train_set)
+            list_val.append(val_set)
+            list_test.append(val_set)
+        
+        split = [ [], [], [] ]
+        
+        for i in range (len(list_train)):
+            split[0].append(ClassifierDatasetSplit(model_name=self.model_name, data=list_train[i], split_name='train', p_augmentation=p_augmentation, augmentation_techniques=augmentation_techniques))
+            split[1].append(ClassifierDatasetSplit(model_name=self.model_name, data=list_val[i], split_name="val"))
+            split[1].append(ClassifierDatasetSplit(model_name=self.model_name, data=list_test[i], split_name="test"))
+        
+        return split

@@ -5,6 +5,10 @@ from models.rnn import *
 from models.mlp_cd import MlpCD
 import os
 import timm
+from models.resnet34_SPP import ResNet34_SPP
+
+from einops import rearrange, reduce, repeat
+from einops.layers.torch import Rearrange, Reduce
 
 class BackboneCNN(nn.Module):
     def __init__(self, out_features = 256):
@@ -34,7 +38,7 @@ class BackboneCNN(nn.Module):
 
 # LSTM Model
 class ConvLSTM(nn.Module):
-    def __init__(self, dropout:.3, hidden_size=64, num_layers = 2, backbone_output_feat = 256, clinical_data_output_dim = 10, use_clinical_data=True):
+    def __init__(self, dropout:.3, hidden_size=64, num_layers = 2, backbone_output_feat = 512, clinical_data_output_dim = 10, use_clinical_data=True):
         super(ConvLSTM, self).__init__()
         self.use_clinical_data=use_clinical_data
         self.backbone = BackboneCNN(out_features=backbone_output_feat)
@@ -53,49 +57,26 @@ class ConvLSTM(nn.Module):
         
         self.fc = nn.Linear(hidden_size, 1)
 
-    def extract_slices_2channel(self, mr, rtd):
-        slices = []
-        
-        slices_x = torch.stack((mr.permute(2, 0, 1, 3), rtd.permute(2, 0, 1, 3)), dim=2)
-        # slices_y = torch.stack((mr.permute(3, 0, 2, 1), rtd.permute(3, 0, 2, 1)), dim=2)
-        # slices_z = torch.stack((mr.permute(1, 0, 3, 2), rtd.permute(1, 0, 3, 2)), dim=2)
-
-        # Concatenate all slices along a new dimension (the slice dimension)
-        # slices = torch.cat((slices_x, slices_y, slices_z), dim=0)
-
-        slices = slices_x
-        
-        # Reshape to have channels in the correct order
-        slices = slices.permute(1, 0, 2, 3, 4)  # Shape: [batch_size, num_slices, 2, H, W]
-        
-        return slices
-    
-    def extract_slices_1channel(self, mr, rtd):
-        # Stack slices along the x-axis, y-axis, and z-axis
-        slices_x = torch.stack((mr.permute(2, 0, 1, 3), rtd.permute(2, 0, 1, 3)), dim=2)  # Shape: [depth_x, batch_size, 2, H, W]
-        slices_y = torch.stack((mr.permute(3, 0, 2, 1), rtd.permute(3, 0, 2, 1)), dim=2)  # Shape: [depth_y, batch_size, 2, H, W]
-        slices_z = torch.stack((mr.permute(1, 0, 3, 2), rtd.permute(1, 0, 3, 2)), dim=2)  # Shape: [depth_z, batch_size, 2, H, W]
-
-        # Concatenate all slices along a new dimension (the slice dimension)
-        slices = torch.cat((slices_x, slices_y, slices_z), dim=0)  # Shape: [num_slices, batch_size, 2, H, W]
-        
-        # Reshape to have channels in the correct order
-        slices = slices.permute(1, 0, 2, 3, 4)  # Shape: [batch_size, num_slices, 2, H, W]
-        slices = slices.reshape(slices.size(0), -1, 1, slices.size(3), slices.size(4))
-        
-        return slices
-
     def forward(self, mr, rtd, clinical_data):
-        slices = self.extract_slices_2channel(mr, rtd)
-        batch_size, num_slices, _, H, W = slices.shape
         
-        features = self.backbone(slices.reshape(-1, 2, H, W)).reshape(batch_size, num_slices, -1)
+        batch_size, d, w, h = mr.shape
+        
+        slices_mr = rearrange(mr, 'b d w h -> (b d) w h').unsqueeze(1)
+        slices_rtd = rearrange(rtd, 'b d w h -> (b d) w h').unsqueeze(1)
+
+        # Step 2: Combine the slices, for example, concatenating along the channel axis
+        combined_slices = torch.cat([slices_mr, slices_rtd], dim=1)
+        
+        features = self.backbone(combined_slices)
+        
+        features = rearrange(features, "(b l) f -> b l f", b=batch_size)
         
         if self.use_clinical_data:
             features_clinical_data = self.cd_backbone(clinical_data).unsqueeze(1)
-            features = torch.cat((features, features_clinical_data.expand(-1, num_slices, -1)), dim=2)
+            features = torch.cat((features, features_clinical_data.expand(-1, features.shape[1], -1)), dim=2)
         
         lstm_output = self.layer_norm(self.lstm(features))
+        # lstm_output = self.lstm(features)
         output = self.fc(lstm_output[:, -1, :])
 
         return output

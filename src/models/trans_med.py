@@ -150,7 +150,7 @@ class TransMedModel(nn.Module):
         self.use_clinical_data = use_clinical_data
         self.final_num_heads = 9 if use_clinical_data else 8
         
-        self.transformer = DeiT(emb_size=512, patch_size=patch_size, depth_img=90, depth=12, num_heads=self.final_num_heads, n_classes=1, drop_p=dropout, use_clinical_data=use_clinical_data)
+        self.transformer = DeiT(emb_size=512, patch_size=patch_size, depth_img=90, depth=8, num_heads=self.final_num_heads, n_classes=1, drop_p=dropout, use_clinical_data=use_clinical_data)
         
         if use_clinical_data:
             self.cd_backbone = MlpCD(pretrained=True)

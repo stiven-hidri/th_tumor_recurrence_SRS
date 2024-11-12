@@ -1,7 +1,7 @@
 import os
 import pickle
 from matplotlib import pyplot as plt
-from sklearn.metrics import auc, confusion_matrix, roc_curve, precision_recall_curve
+from sklearn.metrics import auc, confusion_matrix, f1_score, roc_curve, precision_recall_curve
 import torch
 import numpy as np
 from lightning.pytorch import LightningModule
@@ -36,7 +36,7 @@ class ClassificationModule(LightningModule):
         elif name == 'conv_lstm':
             self.model = ConvLSTM(dropout=dropout, hidden_size=hidden_size, num_layers=num_layers, use_clinical_data=use_clinical_data)
         elif name == 'mlp_cd':
-            self.model = MlpCD(dropout=dropout)
+            self.model = MlpCD(dropout=dropout, pretrained=False)
         else:
             raise ValueError(f'Network {name} not available.')
 
@@ -69,10 +69,8 @@ class ClassificationModule(LightningModule):
             
         self.validation_labels = []
         self.validation_losses = []
-        self.validation_f1 = []
         self.validation_outputs = []
         self.validation_best_threshold = .5
-        self.best_validation_statistics = {}
 
     def forward(self, clinical_data, mr=None, rtd=None, mr_rtd_fusion=None):
         if 'mlp_cd' in self.name:
@@ -130,7 +128,6 @@ class ClassificationModule(LightningModule):
         true_labels = [l.item() for l in self.validation_labels[-1]]
                 
         fpr, tpr, thresholds = roc_curve(true_labels, pred_probs)
-
         youden_j = tpr - fpr
         best_t_j = thresholds[np.argmax(youden_j)]
         
@@ -174,10 +171,10 @@ class ClassificationModule(LightningModule):
         names, thresholds, statistics = self.choose_best_threshold_validation()
         
         self.best_validation_statistics = statistics[0]
-        
         self.validation_best_threshold = thresholds[0]
         
-        self.log('val_F1', statistics[0]['f1_score'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('val_threshold_J', thresholds[0], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('val_F1_J', statistics[0]['f1_score'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
     
     def predict_step(self, batch, batch_idx):
         if self.name == 'wdt_conv':
