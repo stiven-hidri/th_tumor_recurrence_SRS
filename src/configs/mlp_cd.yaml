@@ -10,12 +10,12 @@ model:
   hidden_size: 0
   num_layers: 1
   lr: 1e-2
-  weight_decay: 1e-3
-  dropout: 0.1
+  weight_decay: 1e-2
+  dropout: 0.3
   only_test: False
   use_clinical_data: True
   lf: fl          #wbce, bce, fl
-  alpha_fl: .75
+  alpha_fl: .2
   gamma_fl: 2
   pos_weight: .8
   augmentation_techniques: ['shear',  'gaussian_noise', 'brightness']

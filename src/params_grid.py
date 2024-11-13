@@ -9,10 +9,10 @@ param_grid_mlpcd = {
 param_grid_basemodel = {
     'lr':                   [1e-4],
     'batch_size':           [32],
-    'dropout':              [.1, .3],
-    'weight_decay':         [1e-4, 1e-3],
-    'gamma_fl':             [2, 3],
-    'p_augmentation':       [.3, .5, .7],
+    'dropout':              [.3],
+    'weight_decay':         [1e-3],
+    'gamma_fl':             [2],
+    'p_augmentation':       [.5,],
     'use_clinical_data':    [True, False]
 }
 

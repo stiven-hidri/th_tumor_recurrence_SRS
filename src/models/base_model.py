@@ -54,8 +54,7 @@ class BaseModel(nn.Module):
         else:
             self.final_fc = nn.Linear(128 * 2, 1)
         if self.use_clinical_data:
-            self.cd_backbone = MlpCD(pretrained=True)
-            
+            self.cd_backbone = MlpCD(pretrained=False)
             self.cd_backbone.final_fc = nn.Identity()
         
     def forward(self, les_input, dose_input, clinical_input=None):

@@ -1,3 +1,4 @@
+from copy import copy, deepcopy
 import os
 import pickle
 import pywt
@@ -6,6 +7,7 @@ from utils.augment import combine_aug
 from torchvision import transforms
 import numpy as np
 from sklearn.model_selection import StratifiedGroupKFold
+from sklearn.model_selection import GroupShuffleSplit
 import numpy as np
 import torch
 from sklearn import preprocessing
@@ -13,12 +15,12 @@ import torch.nn.functional as F
 from scipy.ndimage import zoom
 
 class ClassifierDatasetSplit(Dataset):
-    def __init__(self, model_name:str, data:dict, split_name:str, p_augmentation:float=None, augmentation_techniques:list=None):
+    def __init__(self, model_name:str, data:dict, split_name:str):
         self.data = data
         self.model_name = model_name
         self.split_name = split_name
-        self.p_augmentation = p_augmentation
-        self.augmentation_techniques = augmentation_techniques
+        self.p_augmentation = None
+        self.augmentation_techniques = None
 
     def __len__(self):
         return len(self.data['label'])
@@ -300,121 +302,124 @@ class ClassifierDataset(Dataset):
         self.global_data = self.__pad_resize_images__(self.global_data)
         self.global_data = self.__discretize_categorical_features__(self.global_data)
         self.max_values = self.__get_max_values__(self.global_data['clinical_data'])
+        
+        self.global_data['mr'] = [torch.Tensor(e).to(torch.float32) for e in self.global_data['mr']]
+        self.global_data['rtd'] = [torch.Tensor(e).to(torch.float32) for e in self.global_data['rtd']]
+        self.global_data['clinical_data'] = [torch.Tensor(e).to(torch.float32).view(-1, 1) for e in self.global_data['clinical_data']]
+        
+        print('Dataset is loaded')
     
-    def return_data_dictionary(self, mr, rtd, clinical_data, labels, subjects, idx):
-        data_dictionary = {
-            "mr": [torch.Tensor(mr[i]).to(torch.float32) for i in idx],
-            "rtd": [torch.Tensor(rtd[i]).to(torch.float32) for i in idx],
-            "mr_rtd_fusion": [self.__wdt_fusion__(mr[i], rtd[i]) for i in idx],
-            "clinical_data": [torch.Tensor(clinical_data[i]).to(torch.float32).view(-1, 1) for i in idx],
-            'label': torch.tensor([labels[i] for i in idx]).to(torch.float32).view(-1, 1),
-            'subject_id': [subjects[i] for i in idx]
-        }
+    def return_data_dictionary(self, mr, rtd, clinical_data, labels, subjects, idx, mr_rtd_fusion=None, tensor_conversion = True):
+        if tensor_conversion:
+            data_dictionary = {
+                "mr": [torch.Tensor(mr[i]).to(torch.float32) for i in idx],
+                "rtd": [torch.Tensor(rtd[i]).to(torch.float32) for i in idx],
+                "mr_rtd_fusion": [self.__wdt_fusion__(mr[i], rtd[i]) for i in idx],
+                "clinical_data": [torch.Tensor(clinical_data[i]).to(torch.float32).view(-1, 1) for i in idx],
+                'label': torch.tensor([labels[i] for i in idx]).to(torch.float32).view(-1, 1),
+                'subject_id': [subjects[i] for i in idx]
+            }
+        else:
+            data_dictionary = {
+                "mr": [mr[i] for i in idx],
+                "rtd": [rtd[i] for i in idx],
+                "mr_rtd_fusion": [mr_rtd_fusion[i] for i in idx],
+                "clinical_data": [clinical_data[i] for i in idx],
+                'label': [labels[i] for i in idx ],
+                'subject_id': [subjects[i] for i in idx]
+            }
+        
         return data_dictionary
     
-    def create_split_keep_test(self, p_augmentation:float, augmentation_techniques:list, k:int):
-        subjects = self.global_data['subject_id']
-        mr = [torch.Tensor(e).to(torch.float32) for e in self.global_data['mr']]
-        rtd = [torch.Tensor(e).to(torch.float32) for e in self.global_data['rtd']]
-        clinical_data = [torch.Tensor(e).to(torch.float32).view(-1, 1) for e in self.global_data['clinical_data']]
-        labels = self.global_data['label']
+    def detach_test_set(self):
+        test_idx = [i for i in range(len(self.global_data['mr'])) if self.global_data['subject_id'][i] in self.ORIGINAL_TEST_SET]
+        
+        self.test_set_tmp = self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], test_idx)
+        
+        self.global_data['mr'] = [ self.global_data['mr'][idx] for idx in range(len(self.global_data['mr'])) if idx not in test_idx]
+        self.global_data['rtd'] = [ self.global_data['rtd'][idx] for idx in range(len(self.global_data['rtd'])) if idx not in test_idx]
+        self.global_data['label'] = [ self.global_data['label'][idx] for idx in range(len(self.global_data['label'])) if idx not in test_idx]
+        self.global_data['subject_id'] = [ self.global_data['subject_id'][idx] for idx in range(len(self.global_data['subject_id'])) if idx not in test_idx]
+        self.global_data['clinical_data'] = [ self.global_data['clinical_data'][idx] for idx in range(len(self.global_data['clinical_data'])) if idx not in test_idx]
+    
+    def create_split_keep_test(self, train_idx, val_idx):
+        
+        train_set = self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], train_idx)
+        val_set = self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], val_idx)
+        test_set = deepcopy(self.test_set_tmp)
+        
+        statistics = self.__compute_statistics__(train_set)
+        
+        train_set = self.__normalize__(train_set, statistics, f=self.__minmax_scaling__)
+        val_set = self.__normalize__(val_set, statistics, f=self.__minmax_scaling__)
+        test_set = self.__normalize__(test_set, statistics, f=self.__minmax_scaling__)
+        
+        train_set = self.__one_hot__(train_set, self.max_values)
+        val_set = self.__one_hot__(val_set, self.max_values)
+        self.__one_hot__(test_set, self.max_values)
+        
+        # train_set = self.__augment_by_flipping__(train_set)
+        
+        return ClassifierDatasetSplit(model_name=self.model_name, data=train_set, split_name="train"), ClassifierDatasetSplit(model_name=self.model_name, data=val_set, split_name="val"), ClassifierDatasetSplit(model_name=self.model_name, data=test_set, split_name="test")
+    
+    def create_split_whole_dataset(self, train_idx, test_idx) -> list[list[ClassifierDatasetSplit]]:    
+        inner_cv = StratifiedGroupKFold(n_splits=5)
+        
+        print('Creating splits...')
             
-        list_train, list_val = [], []
+        train_outer = self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], train_idx)
+        test_set = self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], test_idx)
 
-        n_splits = k
+        # Use the first split as the train/validation division
+        inner_train_idx, val_idx = next(inner_cv.split(train_outer['mr'], train_outer['label'], train_outer['subject_id']))
         
-        skf = StratifiedGroupKFold(n_splits=n_splits)
+        val_set = self.return_data_dictionary(train_outer['mr'], train_outer['rtd'], train_outer['clinical_data'], train_outer['label'], train_outer['subject_id'], val_idx, mr_rtd_fusion=train_outer['mr_rtd_fusion'],tensor_conversion=False)
+        train_set = self.return_data_dictionary(train_outer['mr'], train_outer['rtd'], train_outer['clinical_data'], train_outer['label'], train_outer['subject_id'], inner_train_idx, mr_rtd_fusion=train_outer['mr_rtd_fusion'], tensor_conversion=False)
         
-        test_idx = [i for i in range(len(mr)) if subjects[i] in self.ORIGINAL_TEST_SET]
+        statistics = self.__compute_statistics__(train_set)
         
-        test_set = self.return_data_dictionary(mr, rtd, clinical_data, labels, subjects, test_idx)
+        train_set = self.__normalize__(train_set, statistics, f=self.__minmax_scaling__)
+        val_set = self.__normalize__(val_set, statistics, f=self.__minmax_scaling__)
+        test_set = self.__normalize__(test_set, statistics, f=self.__minmax_scaling__)
         
-        mr = [ mr[idx] for idx in range(len(mr)) if idx not in test_idx]
-        rtd = [ rtd[idx] for idx in range(len(rtd)) if idx not in test_idx]
-        labels = [ labels[idx] for idx in range(len(labels)) if idx not in test_idx]
-        subjects = [ subjects[idx] for idx in range(len(subjects)) if idx not in test_idx]
-        clinical_data = [ clinical_data[idx] for idx in range(len(clinical_data)) if idx not in test_idx]
-        
-        all_statistics = []
-        
-        for fold, (train_idx, val_idx) in enumerate(skf.split(mr, labels, subjects)):
-            
-            train_set = self.return_data_dictionary(mr, rtd, clinical_data, labels, subjects, train_idx)
-            val_set = self.return_data_dictionary(mr, rtd, clinical_data, labels, subjects, val_idx)
-            
-            statistics = self.__compute_statistics__(train_set)
-            all_statistics.append(statistics)
-            
-            train_set = self.__normalize__(train_set, statistics, f=self.__minmax_scaling__)
-            val_set = self.__normalize__(val_set, statistics, f=self.__minmax_scaling__)
-            
-            train_set = self.__one_hot__(train_set, self.max_values)
-            val_set = self.__one_hot__(val_set, self.max_values)
-            
-            # train_set = self.__augment_by_flipping__(train_set)
-            
-            list_train.append(train_set)
-            list_val.append(val_set)
-            
-        averaged_statistics = self.__average_statistics__(all_statistics)
-        
-        test_set = self.__normalize__(test_set, averaged_statistics, f=self.__minmax_scaling__)
+        train_set = self.__one_hot__(train_set, self.max_values)
+        val_set = self.__one_hot__(val_set, self.max_values)
         test_set = self.__one_hot__(test_set, self.max_values)
         
-        split = [ [], [], ClassifierDatasetSplit(model_name=self.model_name, data=test_set, split_name="test") ]
+        # train_set = self.__augment_by_flipping__(train_set)
         
-        for i in range (len(list_train)):
-            split[0].append(ClassifierDatasetSplit(model_name=self.model_name, data=list_train[i], split_name='train', p_augmentation=p_augmentation, augmentation_techniques=augmentation_techniques))
-            split[1].append(ClassifierDatasetSplit(model_name=self.model_name, data=list_val[i], split_name="val"))
-        
-        return split
-    
-    def create_split_whole_dataset(self, p_augmentation:float, augmentation_techniques:list, k:int):
-        subjects = self.global_data['subject_id']
-        mr = [torch.Tensor(e).to(torch.float32) for e in self.global_data['mr']]
-        rtd = [torch.Tensor(e).to(torch.float32) for e in self.global_data['rtd']]
-        clinical_data = [torch.Tensor(e).to(torch.float32).view(-1, 1) for e in self.global_data['clinical_data']]
-        labels = self.global_data['label']
-            
-        list_train, list_val, list_test = [], [], []
+        return ClassifierDatasetSplit(model_name=self.model_name, data=train_set, split_name="train"), ClassifierDatasetSplit(model_name=self.model_name, data=val_set, split_name="val"), ClassifierDatasetSplit(model_name=self.model_name, data=test_set, split_name="test")
 
-        n_splits = k
-        skf = StratifiedGroupKFold(n_splits=n_splits)
+    def create_split_static(self):
         
-        for fold, (train_idx, test_idx) in enumerate(skf.split(mr, labels, subjects)):
-            
-            train_outer = self.return_data_dictionary(mr, rtd, clinical_data, labels, subjects, train_idx)
-            test_set = self.return_data_dictionary(mr, rtd, clinical_data, labels, subjects, test_idx)
-            
-            inner_cv = StratifiedGroupKFold(n_splits=5)
-    
-            # Use the first split as the train/validation division
-            inner_train_idx, val_idx = next(inner_cv.split(train_outer['mr'], train_outer['label'], train_outer['subject_id']))
-            
-            val_set = self.return_data_dictionary(train_outer['mr'], train_outer['rtd'], train_outer['clinical_data'], train_outer['label'], train_outer['subject_id'], val_idx)
-            train_set = self.return_data_dictionary(train_outer['mr'], train_outer['rtd'], train_outer['clinical_data'], train_outer['label'], train_outer['subject_id'], inner_train_idx)
-            
-            statistics = self.__compute_statistics__(train_set)
-            
-            train_set = self.__normalize__(train_set, statistics, f=self.__minmax_scaling__)
-            val_set = self.__normalize__(val_set, statistics, f=self.__minmax_scaling__)
-            test_set = self.__normalize__(test_set, statistics, f=self.__minmax_scaling__)
-            
-            train_set = self.__one_hot__(train_set, self.max_values)
-            val_set = self.__one_hot__(val_set, self.max_values)
-            test_set = self.__one_hot__(val_set, self.max_values)
-            
-            # train_set = self.__augment_by_flipping__(train_set)
-            
-            list_train.append(train_set)
-            list_val.append(val_set)
-            list_test.append(val_set)
+        print('Creating splits...')
         
-        split = [ [], [], [] ]
+        train_size = 0.7
+        val_size = 0.15
+        test_size = 0.15
         
-        for i in range (len(list_train)):
-            split[0].append(ClassifierDatasetSplit(model_name=self.model_name, data=list_train[i], split_name='train', p_augmentation=p_augmentation, augmentation_techniques=augmentation_techniques))
-            split[1].append(ClassifierDatasetSplit(model_name=self.model_name, data=list_val[i], split_name="val"))
-            split[1].append(ClassifierDatasetSplit(model_name=self.model_name, data=list_test[i], split_name="test"))
+        gss = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=42)
+        train_val_idx, test_idx = next(gss.split(self.global_data['mr'], self.global_data['label'], self.global_data['subject_id']))
         
-        return split
+        train_val = self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], train_val_idx)
+        test_set = self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], test_idx)
+        
+        val_relative_size = val_size / (train_size + val_size)
+        
+        gss_inner = GroupShuffleSplit(n_splits=1, test_size=val_relative_size, random_state=42)
+        train_idx, val_idx = next(gss_inner.split(train_val['mr'], train_val['label'], train_val['subject_id']))
+        
+        train_set = self.return_data_dictionary(train_val['mr'], train_val['rtd'], train_val['clinical_data'], train_val['label'], train_val['subject_id'], train_idx, mr_rtd_fusion=train_val['mr_rtd_fusion'], tensor_conversion=False)
+        val_set = self.return_data_dictionary(train_val['mr'], train_val['rtd'], train_val['clinical_data'], train_val['label'], train_val['subject_id'], val_idx, mr_rtd_fusion=train_val['mr_rtd_fusion'], tensor_conversion=False)
+        
+        statistics = self.__compute_statistics__(train_set)
+        
+        train_set = self.__normalize__(train_set, statistics, f=self.__minmax_scaling__)
+        val_set = self.__normalize__(val_set, statistics, f=self.__minmax_scaling__)
+        test_set = self.__normalize__(test_set, statistics, f=self.__minmax_scaling__)
+        
+        train_set = self.__one_hot__(train_set, self.max_values)
+        val_set = self.__one_hot__(val_set, self.max_values)
+        test_set = self.__one_hot__(test_set, self.max_values)
+        
+        return ClassifierDatasetSplit(model_name=self.model_name, data=train_set, split_name="train"), ClassifierDatasetSplit(model_name=self.model_name, data=val_set, split_name="val"), ClassifierDatasetSplit(model_name=self.model_name, data=test_set, split_name="test")

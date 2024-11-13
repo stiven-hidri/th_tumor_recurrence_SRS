@@ -20,7 +20,7 @@ from argparse import ArgumentParser
 from sklearn.metrics import f1_score
 
 torch.set_num_threads(8)
-torch.cuda.set_per_process_memory_fraction(fraction=.33, device=None)
+# torch.cuda.set_per_process_memory_fraction(fraction=.33, device=None)
 
 model_parameters = [ 
     "name",
@@ -166,7 +166,6 @@ if __name__ == '__main__':
         raise NotImplementedError("Model not implemented")
     
     k = config.logger.k
-    majority_vote = config.logger.majority_vote
     
     # Generate all parameter combinations
     keys, values = zip(*param_grid.items())
@@ -174,6 +173,7 @@ if __name__ == '__main__':
     
     # Load sources and create datasets
     classifier_dataset = ClassifierDataset(model_name=config.model.name)
+    classifier_dataset.detach_test_set()
     
     for i, param_set in enumerate(all_param_combinations):
         print(f"**********\n{i+1}/{len(all_param_combinations)}:\n**********")
@@ -184,15 +184,10 @@ if __name__ == '__main__':
         else:
             p_augmentation=0.
         
-        list_train, list_val, test_set = classifier_dataset.create_split_keep_test(p_augmentation=p_augmentation, augmentation_techniques=[], k=k)
-        
         batch_size = param_set['batch_size']
-    
         del param_set['batch_size']
         
         torch.manual_seed(42)
-        
-        test_dataloader = DataLoader(test_set, batch_size=batch_size, num_workers=4, persistent_workers=True)
         
         # Initialize list to collect test predictions for majority voting
         test_predictions = defaultdict(list)
@@ -204,11 +199,19 @@ if __name__ == '__main__':
             if attr not in param_grid.keys() and attr in model_parameters:
                 param_set[attr] = value
         
-        # K-fold cross-validation
-        for fold, (train_set, val_set) in enumerate(zip(list_train, list_val)):     
+        skf = StratifiedGroupKFold(n_splits=k)
+        
+        for fold, (train_idx, val_idx) in enumerate(skf.split(classifier_dataset.global_data['mr'], classifier_dataset.global_data['label'], classifier_dataset.global_data['subject_id'])):
+            
+            train_set, val_set, test_set = classifier_dataset.create_split_keep_test(train_idx, val_idx)  
+            
+            train_set.p_augmentation = p_augmentation
+            train_set.augmentation_techniques = []
+            
             train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=4, persistent_workers=True)
             val_dataloader = DataLoader(val_set, batch_size=batch_size, num_workers=4, persistent_workers=True)
-
+            test_dataloader = DataLoader(test_set, batch_size=batch_size, num_workers=4, persistent_workers=True) 
+            
             # Logger for each experiment
             logger = TensorBoardLogger(save_dir=config.logger.log_dir, version=f"version_{version}_fold_{fold}", name=config.logger.experiment_name)
             
@@ -223,7 +226,7 @@ if __name__ == '__main__':
             # Checkpoint callback
             checkpoint_cb = ModelCheckpoint(monitor=config.checkpoint.monitor, dirpath=os.path.join(config.logger.log_dir, config.logger.experiment_name, f'version_{version}_fold_{fold}'), filename='{epoch:03d}_{' + config.checkpoint.monitor + ':.6f}', save_weights_only=True, save_top_k=config.checkpoint.save_top_k, mode=config.checkpoint.mode)
             
-            early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.001, patience=3, verbose=True, mode="min")
+            early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.01, patience=3, verbose=True, mode="min")
 
             # Trainer
             trainer = Trainer(logger=logger, accelerator=device, devices=[0] if device == "gpu" else "auto", default_root_dir=config.logger.log_dir, max_epochs=config.model.epochs, check_val_every_n_epoch=1, callbacks=[checkpoint_cb, early_stop_callback], log_every_n_steps=1, num_sanity_val_steps=0,reload_dataloaders_every_n_epochs=1)
@@ -260,7 +263,7 @@ if __name__ == '__main__':
         
         final_val_statistics = calculate_mean_statistics(val_statistics)
         
-        if majority_vote:
+        if config.logger.majority_vote:
             for sample_idx, preds in test_predictions.items():
                 test_predictions[sample_idx] = [1 if p > final_t else 0 for p in preds]
             

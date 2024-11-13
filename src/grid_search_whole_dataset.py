@@ -20,7 +20,7 @@ from argparse import ArgumentParser
 from sklearn.metrics import f1_score
 
 torch.set_num_threads(8)
-torch.cuda.set_per_process_memory_fraction(fraction=.33, device=None)
+# torch.cuda.set_per_process_memory_fraction(fraction=.5, device=None)
 
 model_parameters = [ 
     "name",
@@ -149,8 +149,6 @@ if __name__ == '__main__':
         else:
             p_augmentation=0.
         
-        list_train, list_val, list_set = classifier_dataset.create_split_whole_dataset(p_augmentation=p_augmentation, augmentation_techniques=[], k=k)
-        
         batch_size = param_set['batch_size']
     
         del param_set['batch_size']
@@ -170,8 +168,18 @@ if __name__ == '__main__':
             if attr not in param_grid.keys() and attr in model_parameters:
                 param_set[attr] = value
         
-        # K-fold cross-validation
-        for fold, (train_set, val_set, test_set) in enumerate(zip(list_train, list_val, list_set)):     
+        n_splits = k
+        outer_cv = StratifiedGroupKFold(n_splits=n_splits)
+        
+        print('Creating splits...')
+        
+        for fold, (train_idx, test_idx) in enumerate(outer_cv.split(classifier_dataset.global_data['mr'], classifier_dataset.global_data['label'], classifier_dataset.global_data['subject_id'])):
+            
+            train_set, val_set, test_set = classifier_dataset.create_split_whole_dataset(train_idx, test_idx)
+            
+            train_set.p_augmentation = p_augmentation
+            train_set.augmentation_techniques = []
+            
             train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=4, persistent_workers=True)
             val_dataloader = DataLoader(val_set, batch_size=batch_size, num_workers=4, persistent_workers=True)
             test_dataloader = DataLoader(test_set, batch_size=batch_size, num_workers=4, persistent_workers=True)

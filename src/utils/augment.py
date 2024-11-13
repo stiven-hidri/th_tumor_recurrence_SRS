@@ -79,23 +79,6 @@ def shear(mr, rtd=None):
     
     return mr, rtd
 
-def flip(mr, rtd=None):
-    axis = random.choice([0, 1, 2])
-    
-    mr = torch.flip(mr, dims=[axis])
-    rtd = torch.flip(rtd, dims=[axis]) if rtd is not None else None
-        
-    return mr, rtd
-
-def rotate(mr, rtd=None):
-    axis = random.choice([(1,2), (0,2), (0,1)]) # x, y, z 
-    k = np.random.choice([1, 2, 3])
-    
-    mr = torch.rot90(mr, k=k, dims=axis)
-    rtd = torch.rot90(rtd, k=k, dims=axis) if rtd is not None else None
-        
-    return mr, rtd
-
 def random_translate(mr, rtd, translate_range=(-10, 10)):
     # Check if input tensors have batch dimension
     if len(mr.shape) == 4:  # Shape: (C, D, H, W)
@@ -181,10 +164,8 @@ def combine_aug(mr, rtd=None, p_augmentation=.3, augmentations_techinques=['shea
     
     augmentations = {
         'shear': shear, 
-        'flip': flip, 
         'gaussian_noise':gaussian_noise, 
         'brightness':brightness,
-        'rotate':rotate,
         'random_translate':random_translate,
         'random_affine':random_affine,
         'random_rotate':random_rotate,
@@ -193,7 +174,9 @@ def combine_aug(mr, rtd=None, p_augmentation=.3, augmentations_techinques=['shea
     
     # augmentations_techinques = random.choices([random.choice(['random_rotate','random_flip']), random.choice(['shear','random_affine'])] , k=random.randint(1, 2))
     
-    augmentations_techinques = random.choices(['random_rotate', random.choice(['shear','random_affine'])] , k=random.randint(1, 2))
+    augmentations_techinques = [ *random.sample(['random_rotate', 'random_flip'], random.randint(1, 2)), *random.sample(['shear','random_affine'], 1)]
+        
+    # augmentations_techinques = ['random_rotate', 'random_flip']
         
     if random.random() <= p_augmentation:
         augmentations = [augmentations[a] for a in augmentations_techinques if a in list(augmentations.keys())]

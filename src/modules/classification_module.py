@@ -71,6 +71,11 @@ class ClassificationModule(LightningModule):
         self.validation_losses = []
         self.validation_outputs = []
         self.validation_best_threshold = .5
+        
+        self.test_stuff = {
+            'predictions':  [],
+            'labels': []
+        }
 
     def forward(self, clinical_data, mr=None, rtd=None, mr_rtd_fusion=None):
         if 'mlp_cd' in self.name:
@@ -173,8 +178,28 @@ class ClassificationModule(LightningModule):
         self.best_validation_statistics = statistics[0]
         self.validation_best_threshold = thresholds[0]
         
-        self.log('val_threshold_J', thresholds[0], logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('val_F1_J', statistics[0]['f1_score'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('val_f1', statistics[0]['f1_score'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        
+    def test_step(self, batch, batch_idx):
+        if self.name == 'wdt_conv':
+            mr_rtd_fusion, clinical_data, label = batch
+            prediction = self(mr_rtd_fusion=mr_rtd_fusion, clinical_data=clinical_data)
+        else:
+            mr, rtd, clinical_data, label = batch
+            prediction = self(mr=mr, rtd=rtd, clinical_data=clinical_data)
+        
+        
+        pred_probs = [p.item() for p in torch.sigmoid(prediction)]
+        true_labels = [l.item() for l in label]
+        
+        self.test_stuff['predictions'].extend(pred_probs)
+        self.test_stuff['labels'].extend(true_labels)
+
+    def on_test_epoch_end(self):
+        # Aggregate and log metrics across all batches
+        performance = self.calculate_statistics(self.test_stuff['predictions'], self.test_stuff['labels'], self.validation_best_threshold)
+        
+        self.log('test_f1', performance['f1_score'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
     
     def predict_step(self, batch, batch_idx):
         if self.name == 'wdt_conv':

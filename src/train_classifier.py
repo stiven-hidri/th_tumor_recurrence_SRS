@@ -8,26 +8,29 @@ from modules import ClassificationModule
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 import yaml
 import os
+import torch
 
 if __name__ == '__main__':
-    # Get configuration arguments
     parser = Parser()
+
     config, device = parser.parse_args()
-
-    # Load sources
-    classifier_dataset = ClassifierDataset(p_augmentation=config.model.p_augmentation, augmentation_techniques=config.model.augmentation_techniques)
-
-    # Create train-val-test splits
-    train_split, val_split, test_split = classifier_dataset.create_splits()
+    
+    # Load sources and create datasets
+    classifier_dataset = ClassifierDataset(model_name=config.model.name)
+    train_set, val_set, test_set = classifier_dataset.create_split_static()
 
     # Instantiate Dataloaders for each split
-    train_dataloader = DataLoader(train_split, batch_size=config.model.batch_size, shuffle=True, num_workers=4, persistent_workers=True)
-    val_dataloader = DataLoader(val_split, batch_size=config.model.batch_size, num_workers=4, persistent_workers=True)
-    test_dataloader = DataLoader(test_split, batch_size=config.model.batch_size, num_workers=4, persistent_workers=True)
+    train_set.augmentation_techniques = []
+    train_set.p_augmentation = config.model.p_augmentation
+    
+    torch.manual_seed(42)
+    
+    train_dataloader = DataLoader(train_set, batch_size=config.model.batch_size, shuffle=True, num_workers=4, persistent_workers=True)
+    val_dataloader = DataLoader(val_set, batch_size=config.model.batch_size, num_workers=4, persistent_workers=True)
+    test_dataloader = DataLoader(test_set, batch_size=config.model.batch_size, num_workers=4, persistent_workers=True)
 
     # Instantiate logger, logs goes into {config.logger.log_dir}/{config.logger.experiment_name}/version_{config.logger.version}
     logger = TensorBoardLogger(save_dir=config.logger.log_dir, version=config.logger.version, name=config.logger.experiment_name )
-
 
     # Load pretrained model or else start from scratch
     if config.model.pretrained is None:
@@ -89,7 +92,7 @@ if __name__ == '__main__':
         mode=config.checkpoint.mode,
     )
 
-    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=10, verbose=True, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0., patience=3, verbose=True, mode="min")
 
     # Instantiate a trainer
     trainer = Trainer(
@@ -108,6 +111,7 @@ if __name__ == '__main__':
     # Train
     if not config.model.only_test:
         trainer.fit(model=module, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
+        threshold = module.validation_best_threshold
 
     # Get the best checkpoint path and load the best checkpoint for testing
     best_checkpoint_path = checkpoint_cb.best_model_path
@@ -115,4 +119,5 @@ if __name__ == '__main__':
         module = ClassificationModule.load_from_checkpoint(name=config.model.name, checkpoint_path=best_checkpoint_path)
 
     # Test
-    results = trainer.test(model=module, dataloaders=test_dataloader)
+    module.validation_best_threshold = threshold
+    trainer.test(model=module, dataloaders=test_dataloader)
