@@ -54,7 +54,7 @@ if __name__ == '__main__':
             version=config.logger.version,
             augmentation_techniques = config.model.augmentation_techniques,
             p_augmentation = config.model.p_augmentation,
-            p_augmentation_per_technique = config.model.p_augmentation_per_technique
+            depth_attention = config.model.depth_attention
         )
     else:
         module = ClassificationModule.load_from_checkpoint(
@@ -79,7 +79,7 @@ if __name__ == '__main__':
             version=config.logger.version,
             augmentation_techniques = config.model.augmentation_techniques,
             p_augmentation = config.model.p_augmentation,
-            p_augmentation_per_technique = config.model.p_augmentation_per_technique
+            depth_attention = config.model.depth_attention
         )
 
     # Set callback function to save checkpoint of the model
@@ -92,7 +92,7 @@ if __name__ == '__main__':
         mode=config.checkpoint.mode,
     )
 
-    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0., patience=3, verbose=True, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0, patience=10, verbose=True, mode="min")
 
     # Instantiate a trainer
     trainer = Trainer(
@@ -111,7 +111,8 @@ if __name__ == '__main__':
     # Train
     if not config.model.only_test:
         trainer.fit(model=module, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
-        threshold = module.validation_best_threshold
+        val_threshold = module.validation_best_threshold
+        train_threshold = module.training_best_threshold
 
     # Get the best checkpoint path and load the best checkpoint for testing
     best_checkpoint_path = checkpoint_cb.best_model_path
@@ -119,5 +120,6 @@ if __name__ == '__main__':
         module = ClassificationModule.load_from_checkpoint(name=config.model.name, checkpoint_path=best_checkpoint_path)
 
     # Test
-    module.validation_best_threshold = threshold
+    module.validation_best_threshold = val_threshold
+    module.training_best_threshold = train_threshold
     trainer.test(model=module, dataloaders=test_dataloader)

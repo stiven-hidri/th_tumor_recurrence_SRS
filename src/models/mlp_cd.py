@@ -32,7 +32,7 @@ def load_averaged_weights():
     return avg_state_dict
 
 class MlpCD(nn.Module):
-    def __init__(self, dropout=.1, input_size=47, hidden_size1=18, hidden_size2=10, pretrained=True):
+    def __init__(self, dropout=.1, input_size=47, hidden_size1=22, hidden_size2=10, pretrained=True):
         super(MlpCD, self).__init__()
 
         self.fc1 = nn.Linear(input_size, hidden_size1)  # First hidden layer

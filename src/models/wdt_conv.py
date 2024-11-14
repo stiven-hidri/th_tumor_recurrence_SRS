@@ -29,7 +29,7 @@ class WDTConv(nn.Module):
         self.backbone = generate_resnet34_3d()
         
         if self.use_clinical_data:
-            self.cd_backbone = MlpCD(pretrained=True)
+            self.cd_backbone = MlpCD(pretrained=False)
             
             self.cd_backbone.final_fc = nn.Identity()
 

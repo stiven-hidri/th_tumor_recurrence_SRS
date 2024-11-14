@@ -58,6 +58,7 @@ class ClassifierDataset(Dataset):
         
         self.CLINIC_FEATURES_TO_DISCRETIZE = [0, 1, 3, 4]
         self.CLINIC_FEATURES_TO_NORMALIZE = [2, 5, 6, 7]
+        # 0 = mets_diagnosis, 1 = primary_diagnosis, 2 = age, 3 = gender, 4 = roi, 5 = fractions, 6 = longest_diameter, 7 = number_of_lesions
         self.CLINIC_FEATURES_TO_KEEP = [0, 1, 2, 3, 4, 6, 7]
         
         self.ORIGINAL_TEST_SET = [ 427, 243, 257, 224, 420, 312, 316, 199, 219, 492, 332, 364, 132 ]
@@ -79,7 +80,7 @@ class ClassifierDataset(Dataset):
         fused_details_e = {}
         for key in coeffs_mr.keys():
             if key == 'aaa':  # Skip approximation coefficients for energy fusion
-                fused_details_e[key] = (coeffs_mr[key] + coeffs_rtd[key]) / 2
+                fused_details_e[key] = (coeffs_mr[key]*.55 + coeffs_rtd[key]*.45)
             else:
                 energy1 = np.abs(coeffs_mr[key]) ** 2
                 energy2 = np.abs(coeffs_rtd[key]) ** 2
@@ -112,7 +113,7 @@ class ClassifierDataset(Dataset):
                 
                 split['subject_id'].extend(augmemted_subject_id)
                 split['clinical_data'].extend(augmented_clinical_data)
-                split['label'] = torch.cat((split['label'], torch.tensor(augmented_label).to(torch.float32).view(-1, 1)), dim=0)
+                split['label'].extend(augmented_label)
                 
 
             
@@ -267,7 +268,7 @@ class ClassifierDataset(Dataset):
                         
         return max_values
 
-    def __pad_resize_images__(self, global_data, desired_shape=(90, 90, 90)):        
+    def __pad_resize_images__(self, global_data, desired_shape=(42, 42, 42)):        
         keys = ['mr', 'rtd']
         for i in range(len(global_data['mr'])):
             for k in keys:
@@ -356,16 +357,14 @@ class ClassifierDataset(Dataset):
         
         train_set = self.__one_hot__(train_set, self.max_values)
         val_set = self.__one_hot__(val_set, self.max_values)
-        self.__one_hot__(test_set, self.max_values)
+        test_set = self.__one_hot__(test_set, self.max_values)
         
         # train_set = self.__augment_by_flipping__(train_set)
         
         return ClassifierDatasetSplit(model_name=self.model_name, data=train_set, split_name="train"), ClassifierDatasetSplit(model_name=self.model_name, data=val_set, split_name="val"), ClassifierDatasetSplit(model_name=self.model_name, data=test_set, split_name="test")
     
     def create_split_whole_dataset(self, train_idx, test_idx) -> list[list[ClassifierDatasetSplit]]:    
-        inner_cv = StratifiedGroupKFold(n_splits=5)
-        
-        print('Creating splits...')
+        inner_cv = StratifiedGroupKFold(n_splits=6)
             
         train_outer = self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], train_idx)
         test_set = self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], test_idx)
@@ -386,7 +385,7 @@ class ClassifierDataset(Dataset):
         val_set = self.__one_hot__(val_set, self.max_values)
         test_set = self.__one_hot__(test_set, self.max_values)
         
-        # train_set = self.__augment_by_flipping__(train_set)
+        train_set = self.__augment_by_flipping__(train_set)
         
         return ClassifierDatasetSplit(model_name=self.model_name, data=train_set, split_name="train"), ClassifierDatasetSplit(model_name=self.model_name, data=val_set, split_name="val"), ClassifierDatasetSplit(model_name=self.model_name, data=test_set, split_name="test")
 
@@ -421,5 +420,7 @@ class ClassifierDataset(Dataset):
         train_set = self.__one_hot__(train_set, self.max_values)
         val_set = self.__one_hot__(val_set, self.max_values)
         test_set = self.__one_hot__(test_set, self.max_values)
+        
+        train_set = self.__augment_by_flipping__(train_set)
         
         return ClassifierDatasetSplit(model_name=self.model_name, data=train_set, split_name="train"), ClassifierDatasetSplit(model_name=self.model_name, data=val_set, split_name="val"), ClassifierDatasetSplit(model_name=self.model_name, data=test_set, split_name="test")

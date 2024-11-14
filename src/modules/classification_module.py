@@ -16,17 +16,19 @@ from utils.loss_functions import BCELoss, WeightedBCELoss, FocalLoss
 from sklearn.metrics import roc_auc_score
 
 class ClassificationModule(LightningModule):
-    def __init__(self, name: str, epochs: int, lr: float, optimizer: str, scheduler: str, weight_decay: float, lf:str, pos_weight:float, dropout: float, use_clinical_data:bool, alpha_fl:float, gamma_fl:float, rnn_type: str, hidden_size: int, num_layers: int, experiment_name: str, version: int, augmentation_techniques: list, p_augmentation: float, p_augmentation_per_technique: float):
+    def __init__(self, name: str, epochs: int, lr: float, optimizer: str, scheduler: str, weight_decay: float, lf:str, pos_weight:float, dropout: float, use_clinical_data:bool, alpha_fl:float, gamma_fl:float, rnn_type: str, hidden_size: int, num_layers: int, experiment_name: str, version: int, augmentation_techniques: list, p_augmentation: float, depth_attention: float):
         super().__init__()
         self.save_hyperparameters()
         self.name = name
+        
+        print(f'Using {name} lr: {lr} weight_decay: {weight_decay} lf: {lf} dropout: {dropout} alpha_fl: {alpha_fl} gamma_fl: {gamma_fl} p_augmentation: {p_augmentation} ' )
         
         # Config    
         # Network
         if name == 'base_model_enhancedV2':
             self.model = BaseModel_EnhancedV2(dropout=dropout, use_clinical_data=use_clinical_data)
         elif name == 'trans_med':
-            self.model = TransMedModel(use_clinical_data=use_clinical_data, dropout=dropout)
+            self.model = TransMedModel(use_clinical_data=use_clinical_data, dropout=dropout, depth_attention=depth_attention)
         elif name == 'wdt_conv':
             self.model = WDTConv(dropout=dropout, use_clinical_data=use_clinical_data)
         elif name == 'base_model':
@@ -58,7 +60,7 @@ class ClassificationModule(LightningModule):
         self.version = version
         self.augmentation_techniques = augmentation_techniques
         self.p_augmentation = p_augmentation
-        self.p_augmentation_per_technique = p_augmentation_per_technique
+        self.depth_attention = depth_attention
         
         if lf == "bce":
             self.lf = BCELoss()
@@ -71,6 +73,11 @@ class ClassificationModule(LightningModule):
         self.validation_losses = []
         self.validation_outputs = []
         self.validation_best_threshold = .5
+        
+        self.training_labels = []
+        self.training_losses = []
+        self.training_outputs = []
+        self.training_best_threshold = .5
         
         self.test_stuff = {
             'predictions':  [],
@@ -90,6 +97,11 @@ class ClassificationModule(LightningModule):
     def loss_function(self, prediction, label):
         return self.lf.forward(prediction, label)
 
+    def on_train_epoch_start(self):
+        self.training_labels.append([])
+        self.training_losses.append([])
+        self.training_outputs.append([])
+    
     def training_step(self, batch):
         if self.name == 'wdt_conv':
             mr_rtd_fusion, clinical_data, label = batch
@@ -99,12 +111,42 @@ class ClassificationModule(LightningModule):
             prediction = self(mr=mr, rtd=rtd, clinical_data=clinical_data)
         
         loss = self.loss_function(prediction, label)
+            
+        self.training_outputs[-1].extend(torch.sigmoid(prediction))
+        self.training_labels[-1].extend(label)
+        self.training_losses[-1].append(loss.item())
+        
         self.log('train_loss', loss.item(), logger=True, prog_bar=True, on_step=False, on_epoch=True)
         return {"loss": loss}
     
     def on_train_epoch_end(self):
         optimizer = self.optimizers()
         lr = optimizer.param_groups[0]['lr']
+        
+        if len(self.training_labels) > 1:
+            if np.mean(self.training_losses[-1]) < np.mean(self.training_losses[-2]):
+                to_be_removed = -2
+            else:
+                to_be_removed = -1
+                
+            self.training_labels.pop(to_be_removed)
+            self.training_losses.pop(to_be_removed)
+            self.training_outputs.pop(to_be_removed)
+        
+        name, threshold, statistics = self.choose_best_threshold(self.training_outputs[-1], self.training_labels[-1])
+        
+        self.training_best_threshold = threshold
+        self.best_training_statistics = statistics
+        
+        self.log('threshold_train', threshold, logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('f1_train', statistics['f1_score'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('precision_train', statistics['precision'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('recall_train', statistics['recall'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('specificity_train', statistics['specificity'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('accuracy_train', statistics['accuracy'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('pr_auc_train', statistics['pr_auc'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('roc_auc_train', statistics['roc_auc'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        
         self.log('lr', lr, prog_bar=True, on_epoch=True)   
 
     def calculate_statistics(self, pred_probs, true_labels, t):
@@ -115,7 +157,8 @@ class ClassificationModule(LightningModule):
         recall = TP / (TP + FN) if (TP + FN) > 0 else 0
         precision = TP / (TP + FP) if (TP + FP) > 0 else 0
         
-        precision_curve, recall_curve, thresholds = precision_recall_curve(true_labels, pred_labels)
+        precision_curve, recall_curve, thresholds = precision_recall_curve(true_labels, pred_probs)
+        roc_auc = roc_auc_score(true_labels, pred_probs)
         
         statistics = {
             "accuracy": (TP + TN) / (TP + TN + FP + FN) if (TP + TN + FP + FN) > 0 else 0,
@@ -123,20 +166,31 @@ class ClassificationModule(LightningModule):
             "specificity": TN / (TN + FP) if (TN + FP) > 0 else 0,
             "precision": precision,
             "f1_score": 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0,
-            "pr_auc": auc(recall_curve, precision_curve)
+            "pr_auc": auc(recall_curve, precision_curve),
+            "roc_auc": roc_auc
         }
         
         return statistics
 
-    def choose_best_threshold_validation(self):
-        pred_probs = [p.item() for p in self.validation_outputs[-1]]
-        true_labels = [l.item() for l in self.validation_labels[-1]]
+    def choose_best_threshold(self, outputs, labels):
+        pred_probs = [p.item() for p in outputs]
+        true_labels = [l.item() for l in labels]
                 
-        fpr, tpr, thresholds = roc_curve(true_labels, pred_probs)
+        #maximize_j
+        fpr, tpr, thresholds_j = roc_curve(true_labels, pred_probs)
         youden_j = tpr - fpr
-        best_t_j = thresholds[np.argmax(youden_j)]
+        best_t_j = thresholds_j[np.argmax(youden_j)]
         
-        return ['j'], [best_t_j], [self.calculate_statistics(pred_probs, true_labels, best_t_j)]
+        #maximize_f1
+        precision, recall, thresholds_f1 = precision_recall_curve(true_labels, pred_probs)
+        fscore = (2 * precision * recall) / (precision + recall)
+        fscore = np.nan_to_num(fscore, nan=-np.inf)
+        best_t_f1 = thresholds_f1[np.argmax(fscore)]
+        
+        names, thresholds_techinques, statistics = ['j', 'f1'], [best_t_j, best_t_f1], [self.calculate_statistics(pred_probs, true_labels, best_t_j), self.calculate_statistics(pred_probs, true_labels, best_t_f1)]
+        
+        final_i = int(np.argmax([x['f1_score'] for x in statistics]))
+        return names[final_i], thresholds_techinques[final_i], statistics[final_i]
 
     def on_validation_epoch_start(self):
         self.validation_labels.append([])
@@ -173,12 +227,18 @@ class ClassificationModule(LightningModule):
             self.validation_losses.pop(to_be_removed)
             self.validation_outputs.pop(to_be_removed)
         
-        names, thresholds, statistics = self.choose_best_threshold_validation()
+        name, threshold, statistics = self.choose_best_threshold(self.validation_outputs[-1], self.validation_labels[-1])
         
-        self.best_validation_statistics = statistics[0]
-        self.validation_best_threshold = thresholds[0]
+        self.validation_best_threshold = threshold
+        self.best_validation_statistics = statistics
         
-        self.log('val_f1', statistics[0]['f1_score'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('threshold_val', threshold, logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('f1_val', statistics['f1_score'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('precision_val', statistics['precision'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('recall_val', statistics['recall'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('specificity_val', statistics['specificity'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('accuracy_val', statistics['accuracy'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('pr_auc_val', statistics['pr_auc'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
         
     def test_step(self, batch, batch_idx):
         if self.name == 'wdt_conv':
@@ -197,9 +257,15 @@ class ClassificationModule(LightningModule):
 
     def on_test_epoch_end(self):
         # Aggregate and log metrics across all batches
-        performance = self.calculate_statistics(self.test_stuff['predictions'], self.test_stuff['labels'], self.validation_best_threshold)
+        performance = self.calculate_statistics(self.test_stuff['predictions'], self.test_stuff['labels'], (self.validation_best_threshold + self.training_best_threshold)/2)
         
         self.log('test_f1', performance['f1_score'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('test_precision', performance['precision'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('test_recall', performance['recall'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('test_specificity', performance['specificity'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('test_accuracy', performance['accuracy'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('test_pr_auc', performance['pr_auc'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('test_roc_auc', performance['roc_auc'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
     
     def predict_step(self, batch, batch_idx):
         if self.name == 'wdt_conv':
@@ -209,9 +275,10 @@ class ClassificationModule(LightningModule):
             mr, rtd, clinical_data, label = batch
             logits = self(mr=mr, rtd=rtd, clinical_data=clinical_data)
 
-        predictions = torch.sigmoid(logits)
+        predictions = [l.cpu().item() for l in torch.sigmoid(logits)]
+        labels =  [l.cpu().item() for l in label]
 
-        return {"predictions": predictions, "labels": label}
+        return {"predictions": predictions, "labels": labels}
 
     def configure_optimizers(self):
         scheduler = None
@@ -244,7 +311,7 @@ class ClassificationModule(LightningModule):
         
         elif self.scheduler == 'plateau':
             print("Using ReduceLROnPlateau scheduler")
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizers, mode='min', factor=0.5, patience=1, min_lr=1e-12)
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizers, mode='min', factor=0.1, patience=1, min_lr=1e-12)
             return  {
                         'optimizer': optimizers,
                         'lr_scheduler': scheduler,

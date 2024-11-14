@@ -3,24 +3,24 @@ dataset:
 model:
   name: trans_med
   epochs: 100
-  batch_size: 4
-  optimizer: sgd
+  batch_size: 32
+  optimizer: adam
   scheduler: plateau
   rnn_type: None
   hidden_size: 0
   num_layers: 0
-  lr: 1e-3
+  lr: 1e-4
   weight_decay: 1e-3
-  dropout: .5
+  dropout: .3
   only_test: False
   lf: fl          #wbce, bce, fl
   use_clinical_data: True
-  alpha_fl: .75
-  gamma_fl: 3
+  alpha_fl: .9
+  gamma_fl: 2
   pos_weight: .8
   augmentation_techniques: ['random_affine', 'shear', 'random_rotate', 'random_flip']
-  p_augmentation: .3
-  p_augmentation_per_technique: .3
+  p_augmentation: 1.
+  depth_attention: .3
 logger:
   log_dir: ./log
   experiment_name: train_base_model

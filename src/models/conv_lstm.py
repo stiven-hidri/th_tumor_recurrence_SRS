@@ -50,7 +50,7 @@ class ConvLSTM(nn.Module):
         self.hidden_size = hidden_size
         
         if self.use_clinical_data:
-            self.cd_backbone = MlpCD(pretrained=True)
+            self.cd_backbone = MlpCD(pretrained=False)
             self.cd_backbone.final_fc = nn.Identity()
 
         self.layer_norm = nn.LayerNorm(hidden_size)
@@ -76,6 +76,7 @@ class ConvLSTM(nn.Module):
             features = torch.cat((features, features_clinical_data.expand(-1, features.shape[1], -1)), dim=2)
         
         lstm_output = self.layer_norm(self.lstm(features))
+
         # lstm_output = self.lstm(features)
         output = self.fc(lstm_output[:, -1, :])
 

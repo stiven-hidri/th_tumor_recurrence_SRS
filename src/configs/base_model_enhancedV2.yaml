@@ -9,18 +9,18 @@ model:
   rnn_type: None
   hidden_size: 0
   num_layers: 0
-  lr: 5e-5
-  weight_decay: 1e-3
+  lr: 1e-3
+  weight_decay: 5e-4
   dropout: .5
   only_test: False
   lf: fl          #wbce, bce, fl
   use_clinical_data: True
-  alpha_fl: .75
-  gamma_fl: 3
-  pos_weight: .8
+  alpha_fl: .5
+  gamma_fl: 2
+  pos_weight: .9
   augmentation_techniques: ['random_affine', 'shear', 'random_rotate', 'random_flip']
-  p_augmentation: .3
-  p_augmentation_per_technique: .3
+  p_augmentation: 1.
+  depth_attention: .3
 logger:
   log_dir: ./log
   experiment_name: train_base_model

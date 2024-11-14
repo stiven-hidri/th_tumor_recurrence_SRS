@@ -1,4 +1,5 @@
 from itertools import product
+import pprint
 import re
 from lightning.pytorch import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint
@@ -41,7 +42,7 @@ model_parameters = [
     "pos_weight",
     "augmentation_techniques",
     "p_augmentation",
-    "p_augmentation_per_technique"
+    "depth_attention"
 ]
 
 model_parameters_toshow = [ 
@@ -52,6 +53,7 @@ model_parameters_toshow = [
     "weight_decay",
     "dropout",
     "use_clinical_data",
+    "alpha_fl",
     "gamma_fl",
     "p_augmentation",
 ]
@@ -86,22 +88,24 @@ def load_checkpoint(config, checkpoint_cb, fold, version):
         
     return module
 
-def calculate_statistics(pred_labels, true_labels):
-    C = confusion_matrix(true_labels, pred_labels)
+def calculate_statistics(predicted_labels, true_labels, predictions):
+    C = confusion_matrix(true_labels, predicted_labels)
     TP, TN, FP, FN = C[1,1], C[0,0], C[0,1], C[1,0]
     
     recall = TP / (TP + FN) if (TP + FN) > 0 else 0
     precision = TP / (TP + FP) if (TP + FP) > 0 else 0
     
-    precision_curve, recall_curve, _ = precision_recall_curve(true_labels, pred_labels)
-        
+    precision_curve, recall_curve, _ = precision_recall_curve(true_labels, predictions)
+    roc_auc = roc_auc_score(true_labels, predictions)
+    
     statistics = {
         "accuracy": (TP + TN) / (TP + TN + FP + FN) if (TP + TN + FP + FN) > 0 else 0,
         "recall": recall,
         "specificity": TN / (TN + FP) if (TN + FP) > 0 else 0,
         "precision": precision,
         "f1_score": 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0,
-        "pr_auc": auc(recall_curve, precision_curve)
+        "pr_auc": auc(recall_curve, precision_curve),
+        "roc_auc": roc_auc
     }
     
     return statistics
@@ -156,12 +160,12 @@ if __name__ == '__main__':
         torch.manual_seed(42)
         
         # Initialize list to collect test predictions for majority voting
-        test_predictions = defaultdict(list)
         test_labels = None
         
-        test_results = {
+        test_predictions = {
             'label_predicted': [],
-            'true_labels': []
+            'true_labels': [],
+            'predictions': []
         }
         
         for attr, value in list(config.model.__dict__.items()):
@@ -176,6 +180,27 @@ if __name__ == '__main__':
         for fold, (train_idx, test_idx) in enumerate(outer_cv.split(classifier_dataset.global_data['mr'], classifier_dataset.global_data['label'], classifier_dataset.global_data['subject_id'])):
             
             train_set, val_set, test_set = classifier_dataset.create_split_whole_dataset(train_idx, test_idx)
+            
+            statisticss = {
+                "train":[0, 0], 
+                "val":  [0, 0],
+                "test": [0, 0]
+                }
+            
+            for key in statisticss.keys():
+                
+                if key == "train":
+                    dataset = train_set.data
+                elif key == "val":
+                    dataset = val_set.data
+                elif key == "test":
+                    dataset = test_set.data
+                
+                for j in range(len(dataset['label'])):
+                    statisticss[key][int(dataset['label'][j])]+=1
+            
+            pprint.pprint(f"fold: {fold}\t{statisticss}")
+            
             
             train_set.p_augmentation = p_augmentation
             train_set.augmentation_techniques = []
@@ -198,7 +223,7 @@ if __name__ == '__main__':
             # Checkpoint callback
             checkpoint_cb = ModelCheckpoint(monitor=config.checkpoint.monitor, dirpath=os.path.join(config.logger.log_dir, config.logger.experiment_name, f'version_{version}_fold_{fold}'), filename='{epoch:03d}_{' + config.checkpoint.monitor + ':.6f}', save_weights_only=True, save_top_k=config.checkpoint.save_top_k, mode=config.checkpoint.mode)
             
-            early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.001, patience=3, verbose=True, mode="min")
+            early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0, patience=3, verbose=True, mode="min")
 
             # Trainer
             trainer = Trainer(logger=logger, accelerator=device, devices=[0] if device == "gpu" else "auto", default_root_dir=config.logger.log_dir, max_epochs=config.model.epochs, check_val_every_n_epoch=1, callbacks=[checkpoint_cb, early_stop_callback], log_every_n_steps=1, num_sanity_val_steps=0,reload_dataloaders_every_n_epochs=1)
@@ -206,7 +231,7 @@ if __name__ == '__main__':
             # Train
             if not config.model.only_test:
                 trainer.fit(model=module, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
-                val_threshold = module.validation_best_threshold
+                threhsold = (module.training_best_threshold + module.validation_best_threshold) / 2
 
             # Collect test predictions per fold if test set is available
             module = load_checkpoint(config, checkpoint_cb, fold, version)
@@ -215,18 +240,18 @@ if __name__ == '__main__':
             current_test_result = trainer.predict(model=module, dataloaders=test_dataloader)
             
             for result in current_test_result:
-                test_predictions['label_predicted'].extend([ 1 if p > val_threshold else 0 for p in result["predictions"] ])
+                predicted_labels = [ 1 if p > threhsold else 0 for p in result["predictions"] ]
+                test_predictions['label_predicted'].extend(predicted_labels)
                 test_predictions['true_labels'].extend(result["labels"])
+                test_predictions['predictions'].extend(result["predictions"])
             
-        performance = calculate_statistics(test_predictions['label_predicted'], test_predictions['true_labels'])
+        performance = calculate_statistics(test_predictions['label_predicted'], test_predictions['true_labels'], test_predictions['predictions'])
         
         # Append this result to results_list
         result_dict = {
             'version': version,
             'batch_size': batch_size,
             **{k:val for k, val in param_set.items() if k in model_parameters_toshow},
-            'threshold':val_threshold,
-            
             **performance
         }
             

@@ -26,7 +26,7 @@ class ModelConfig(BaseModel):
     only_test: bool
     augmentation_techniques: list
     p_augmentation: float
-    p_augmentation_per_technique : float
+    depth_attention : float
     save_images: Optional[Path] = None
     pretrained: Optional[Path] = None
     annotations: Optional[Path] = None

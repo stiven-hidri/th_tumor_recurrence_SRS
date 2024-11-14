@@ -12,6 +12,9 @@ class BaseModel_EnhancedV2(nn.Module):
         self.use_clinical_data = use_clinical_data
         self.out_dim_clincal_features = out_dim_clincal_features
         
+        
+        print(f'use_clinical_data: {use_clinical_data}, dropout: {dropout}')
+        
         # Lesion input branch
         self.les_conv1 = nn.Conv3d(1, 32, kernel_size=3, padding=1)
         self.les_pool1 = nn.MaxPool3d(2)
@@ -57,7 +60,7 @@ class BaseModel_EnhancedV2(nn.Module):
         self.dose_fc2 = nn.Linear(512, out_dim_cnn)
             
         if self.use_clinical_data:
-            self.cd_backbone = MlpCD(pretrained=True)
+            self.cd_backbone = MlpCD(pretrained=False)
             
             self.cd_backbone.final_fc = nn.Identity()
                 

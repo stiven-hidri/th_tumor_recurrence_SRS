@@ -41,7 +41,7 @@ model_parameters = [
     "pos_weight",
     "augmentation_techniques",
     "p_augmentation",
-    "p_augmentation_per_technique"
+    "depth_attention"
 ]
 
 model_parameters_toshow = [ 
@@ -86,14 +86,14 @@ def load_checkpoint(config, checkpoint_cb, fold, version):
         
     return module
 
-def calculate_statistics(pred_labels, true_labels):
+def calculate_statistics(pred_labels, true_labels, predictions):
     C = confusion_matrix(true_labels, pred_labels)
     TP, TN, FP, FN = C[1,1], C[0,0], C[0,1], C[1,0]
     
     recall = TP / (TP + FN) if (TP + FN) > 0 else 0
     precision = TP / (TP + FP) if (TP + FP) > 0 else 0
     
-    precision_curve, recall_curve, _ = precision_recall_curve(true_labels, pred_labels)
+    precision_curve, recall_curve, _ = precision_recall_curve(true_labels, predictions)
         
     statistics = {
         "accuracy": (TP + TN) / (TP + TN + FP + FN) if (TP + TN + FP + FN) > 0 else 0,
@@ -257,7 +257,7 @@ if __name__ == '__main__':
                 test_labels = labels
 
         # Perform majority voting
-        final_predictions = []
+        final_predicted_labels = []
         
         final_t = np.mean(val_thresholds)
         
@@ -269,17 +269,19 @@ if __name__ == '__main__':
             
             for sample_idx, preds in test_predictions.items():
                 majority_vote = Counter(preds).most_common(1)[0][0]  # Majority vote
-                final_predictions.append(majority_vote)
+                final_predicted_labels.append(majority_vote)
                 
-            final_test_statistics = calculate_statistics(final_predictions, test_labels)
+            final_test_statistics = calculate_statistics(final_predicted_labels, test_labels, )
         else:
             all_pred_labels = defaultdict(list)
+            all_predictions = defaultdict(list)
             
             for sample_idx, preds in test_predictions.items():
                 for i, pl in enumerate(test_predictions[sample_idx]):
+                    all_predictions[i].append(pl)
                     all_pred_labels[i].append(1 if pl > final_t else 0)
                     
-            all_test_statistics = [calculate_statistics(preds, test_labels) for preds in all_pred_labels.values()]
+            all_test_statistics = [calculate_statistics(pl, test_labels, pred) for key in all_pred_labels.keys() for pl, pred in zip(all_pred_labels[key], all_predictions[key])]
             
             final_test_statistics = calculate_mean_statistics_test(all_test_statistics)
             

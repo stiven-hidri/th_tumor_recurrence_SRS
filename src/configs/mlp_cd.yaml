@@ -20,7 +20,7 @@ model:
   pos_weight: .8
   augmentation_techniques: ['shear',  'gaussian_noise', 'brightness']
   p_augmentation: .0
-  p_augmentation_per_technique: .3
+  depth_attention: .3
 logger:
   log_dir: ./log
   experiment_name: train_mlp_cd

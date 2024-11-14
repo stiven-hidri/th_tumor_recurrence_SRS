@@ -82,7 +82,7 @@ class TransformerEncoder(nn.Sequential):
         super().__init__(*[TransformerEncoderBlock(**kwargs) for _ in range(depth)])
 
 class PatchEmbedding(nn.Module):
-    def __init__(self, patch_size: int = 2, emb_size: int = 512, depth_img:int=42, n_modalities:int=2, num_channels:int=3, use_clinical_data:bool=False, clinical_feat_dim:int=10):
+    def __init__(self, patch_size: int = 1, emb_size: int = 512, depth_img:int=42, n_modalities:int=2, num_channels:int=3, use_clinical_data:bool=False, clinical_feat_dim:int=10):
         self.patch_size = patch_size
         super().__init__()
         
@@ -96,12 +96,12 @@ class PatchEmbedding(nn.Module):
         self.final_feat_dim = emb_size + clinical_feat_dim if use_clinical_data else emb_size
         
         self.cls_token = nn.Parameter(torch.randn(1, 1, self.final_feat_dim))
-        self.positions = nn.Parameter(torch.randn(n_modalities * depth_img * self.patch_size ** 2 // num_channels + 1, self.final_feat_dim))
+        # self.positions = nn.Parameter(torch.randn(n_modalities * depth_img * self.patch_size ** 2 // num_channels + 1, self.final_feat_dim))
 
-    def forward(self, input_transformer: torch.Tensor) -> torch.Tensor:
+    def forward(self, input_transformer) -> torch.Tensor:
         # Process MR and RTD through the patch embedding layers
         
-        if self.use_clinical_data:
+        if self.use_clinical_data and type(input_transformer) is tuple:
             multimodal_image, clinical_feat = input_transformer
         else:
             multimodal_image = input_transformer
@@ -109,6 +109,7 @@ class PatchEmbedding(nn.Module):
         batch_size = multimodal_image.shape[0]
         
         patch_sequence = rearrange(multimodal_image, 'b n c d h w -> b (n c d) h w')
+        
         patch_sequence = rearrange(patch_sequence, 'b (ncd ch3) h w -> b ncd ch3 h w', ch3=3)
 
         if self.patch_size > 1:
@@ -120,7 +121,7 @@ class PatchEmbedding(nn.Module):
         
         patch_embeddings = rearrange(patch_embeddings, "(b l) f -> b l f", b=batch_size)
         
-        if self.use_clinical_data:
+        if self.use_clinical_data and type(input_transformer) is tuple:
             clinical_feat = clinical_feat.unsqueeze(1).expand(-1, patch_embeddings.shape[1], -1)
             patch_embeddings = torch.cat((patch_embeddings, clinical_feat), dim=-1)
         
@@ -129,7 +130,7 @@ class PatchEmbedding(nn.Module):
         x = torch.cat((cls_token, patch_embeddings), dim=1)  # Shape: [batch_size, num_patches + 1, emb_size]
         
         # Add positional embeddings
-        x += self.positions
+        # x += self.positions
         
         return x
 
@@ -137,12 +138,12 @@ class DeiT(nn.Sequential):
     def __init__(self, emb_size: int = 512, depth_img: int = 90, patch_size: int = 2, depth: int = 12, num_heads: int = 8, n_classes: int = 1, use_clinical_data=False, clinical_feat_dim=10, **kwargs):
         self.final_feat_dim = emb_size + clinical_feat_dim if use_clinical_data else emb_size
         super().__init__(
-            PatchEmbedding(depth_img=90, patch_size=patch_size, emb_size=emb_size, use_clinical_data=use_clinical_data),
+            PatchEmbedding(depth_img=depth_img, patch_size=patch_size, emb_size=emb_size, use_clinical_data=use_clinical_data, clinical_feat_dim=clinical_feat_dim),
             TransformerEncoder(depth, emb_size=self.final_feat_dim, num_heads=num_heads, **kwargs)
         )
 
 class TransMedModel(nn.Module):
-    def __init__(self, patch_size=1, emb_size=512, n_classes=1, use_clinical_data=False, clinical_feat_dim=10, dropout=.1):
+    def __init__(self, patch_size=1, emb_size=512, n_classes=1, use_clinical_data=False, clinical_feat_dim=10, dropout=.1, depth_attention = 12):
         super(TransMedModel, self).__init__()
         
         # Define patch size
@@ -150,10 +151,10 @@ class TransMedModel(nn.Module):
         self.use_clinical_data = use_clinical_data
         self.final_num_heads = 9 if use_clinical_data else 8
         
-        self.transformer = DeiT(emb_size=512, patch_size=patch_size, depth_img=90, depth=8, num_heads=self.final_num_heads, n_classes=1, drop_p=dropout, use_clinical_data=use_clinical_data)
+        self.transformer = DeiT(emb_size=512, patch_size=patch_size, depth_img=42, depth=depth_attention, num_heads=self.final_num_heads, n_classes=1, drop_p=dropout, use_clinical_data=use_clinical_data)
         
         if use_clinical_data:
-            self.cd_backbone = MlpCD(pretrained=True)
+            self.cd_backbone = MlpCD(pretrained=False)
             self.cd_backbone.final_fc = nn.Identity()
             self.head = nn.Linear(emb_size+clinical_feat_dim, n_classes)
         else:
@@ -167,8 +168,8 @@ class TransMedModel(nn.Module):
         
         input_transformer = multimodal_image
         
-        if self.patch_size > 1:
-            input_transformer = F.pad(input_transformer, (1, 1, 1, 1, 1, 1))
+        # if self.patch_size > 1:
+        #     input_transformer = F.pad(input_transformer, (1, 1, 1, 1, 1, 1))
 
         if self.use_clinical_data:
             clinical_feat = self.cd_backbone(clinical_data)

@@ -63,7 +63,7 @@ def wdt_fusion(mr, rtd):
             fused_details_e[key] = np.where(energy1 > energy2, coeffs_mr[key], coeffs_rtd[key])
 
     fused_image_e = pywt.idwtn(fused_details_e, wavelet, axes=(0, 1, 2), mode='smooth')
-    fused_image_e = fused_image_e * ( mr > 0 )
+    fused_image_e = fused_image_e # * ( mr > 0 )
     return fused_image_e
 
 if __name__ == '__main__':
@@ -110,6 +110,6 @@ if __name__ == '__main__':
         images[i][1] = (images[i][1] - stats['rtd']['min']) / (stats['rtd']['max'] - stats['rtd']['min'])
         images[i].append(wdt_fusion(images[i][0], images[i][1]))
     
-    for i in range(10):
+    for i in range(30):
         print(f'\r{i+1}/{len(images)}', end='')
         plot(images[i], labels[i], i)

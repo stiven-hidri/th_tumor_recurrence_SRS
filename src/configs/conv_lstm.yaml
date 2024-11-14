@@ -7,20 +7,20 @@ model:
   optimizer: adam
   scheduler: plateau
   rnn_type: none
-  hidden_size: 256
-  num_layers: 1
+  hidden_size: 45
+  num_layers: 2
   lr: 1e-4
   weight_decay: 1e-3
-  dropout: .3
+  dropout: .1
   only_test: False
   use_clinical_data: True
   lf: fl          #wbce, bce, fl
-  alpha_fl: .75
+  alpha_fl: .1
   gamma_fl: 2
-  pos_weight: .8
+  pos_weight: .9
   augmentation_techniques: ['random_affine', 'shear', 'random_rotate', 'random_flip']
-  p_augmentation: .3
-  p_augmentation_per_technique: .4
+  p_augmentation: 1.
+  depth_attention: .4
 logger:
   log_dir: ./log
   experiment_name: conv_lstm_1_cd_gridsearch
