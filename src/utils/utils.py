@@ -9,7 +9,7 @@ import re
 import numpy as np
 def couple_roi_names(clinical_names, target):
     matches = {}
-    if len(clinical_names) == 1 and len(clinical_names) == 1:
+    if len(clinical_names) == 1 and len(target) == 1:
         matches[clinical_names[0]] = target[0]
     else:
         for c in clinical_names:
@@ -249,9 +249,16 @@ def print_statistics_globally():
                 subjects_counter[subject][1] += 1 
         
     pprint.pprint(sorted(subjects_counter.items(), key=lambda x: x[1][1], reverse=True))
+    
+    sum_recurrence = sum([x[1] for x in subjects_counter.values()])
+    sum_stable = sum([x[0] for x in subjects_counter.values()])
+    
+    print(f'\nsum of subjects_counter\n{sum([x[0] + x[1] for x in subjects_counter.values()])}')
+    
+    print(f'\nsum_recurrence: {sum_recurrence}\nsum_stable:{sum_stable}')
 
-463, 158, 247, 408, 234, 421, 431, 346, 487, 274, 338, 105, 293, 314, 227, 330, 391, 
-313, 270, 127, 324, 342, 121, 103, 114, 115, 151, 244, 245, 246, 467, 455, 152, 147
+# 463, 158, 247, 408, 234, 421, 431, 346, 487, 274, 338, 105, 293, 314, 227, 330, 391, 
+# 313, 270, 127, 324, 342, 121, 103, 114, 115, 151, 244, 245, 246, 467, 455, 152, 147
 
 #  (114, [0, 2]),x
 #  (391, [0, 2]),x

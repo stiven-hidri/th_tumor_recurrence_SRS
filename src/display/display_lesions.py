@@ -16,27 +16,28 @@ def clear_directory_content(PATH):
             elif os.path.isdir(file_path):
                 shutil.rmtree(file_path)
 
-def plot(stuff, label, progressive):
-    r = len(stuff)  # Number of rows (types of images)
-    indexes = np.where(np.sum(stuff[1], axis=(1, 2)) > 0)[0]  # Find non-empty slices more efficiently
-    c = 6 if len(indexes) >= 6 else len(indexes)  # Number of columns (slices)
+def plot(stuff, keys, progressive, c_init=6):
+    r = len(keys)  # Number of rows (types of images)
+    indexes = np.where(np.sum(stuff['mr'][progressive], axis=(1, 2)) > 0)[0]  # Find non-empty slices more efficiently
+    
+    c = c_init if len(indexes) >= c_init else len(indexes)  # Number of columns (slices)
     indexes = np.linspace(min(indexes), max(indexes), c+2, dtype=int)[1:-1]
-    labels = ['MRI', 'RTD','WDT_FUSION']
     
     fig = plt.figure(figsize=(13, 8))  # Optional: Smaller figure size
     plt.tight_layout(pad=0, w_pad=0, h_pad=0)  # Adjust values as needed
     
-    fig.suptitle(f'Label: {label}', fontsize=12)
+    fig.suptitle(f'Label: {stuff["label"][progressive]}', fontsize=12)
 
-    for i, s in enumerate(stuff):
-        images = s[indexes]
-        for j, img in enumerate(images):
+    for i, key in enumerate(keys):
+        image = stuff[key][progressive]
+        for j in range(c):
             ax = fig.add_subplot(r, c, i * c + j + 1)  # Create subplot
             ax.axis('off')
-            ax.imshow(img)
+            ax.imshow(image[indexes[j]])
             if j == 0:
-                ax.set_title(f'{labels[i]}', fontsize=10)
-    if label == 1:
+                ax.set_title(f'{key}', fontsize=10)
+
+    if stuff["label"][progressive] == 'recurrence':
         plt.savefig(os.path.join(os.path.dirname(__file__), 'img_lesions', 'recurrence', f'figure_{progressive}.png'))
     else:
         plt.savefig(os.path.join(os.path.dirname(__file__), 'img_lesions', 'stable', f'figure_{progressive}.png'))
@@ -89,27 +90,37 @@ if __name__ == '__main__':
         "mr": {"min": 0, "max": 0 },
     }
     
+    # for file_split in file_names:
+    #     if file_split.endswith('.pkl'):    
+    #         with open(os.path.join(path_to_data_folder, file_split), 'rb') as input_file:
+    #             data = pickle.load(input_file)    
+    #         for i in range(len(data['mr'])):
+    #             images.append([np.array(data['mr'][i]), np.array(data['rtd'][i])])
+    #             if np.max(data['rtd'][i])>stats['rtd']['max']:
+    #                 stats['rtd']['max'] = np.max(data['rtd'][i])
+    #             if np.min(data['rtd'][i])<stats['rtd']['min']:
+    #                 stats['rtd']['min'] = np.min(data['rtd'][i])
+    #             if np.max(data['mr'][i])>stats['mr']['max']:
+    #                 stats['mr']['max'] = np.max(data['mr'][i])
+    #             if np.min(data['mr'][i])<stats['mr']['min']:
+    #                 stats['mr']['min'] = np.min(data['mr'][i])  
+    #         labels.extend(data['label'])
+    
     for file_split in file_names:
         if file_split.endswith('.pkl'):    
             with open(os.path.join(path_to_data_folder, file_split), 'rb') as input_file:
                 data = pickle.load(input_file)    
-            for i in range(len(data['mr'])):
-                images.append([np.array(data['mr'][i]), np.array(data['rtd'][i])])
-                if np.max(data['rtd'][i])>stats['rtd']['max']:
-                    stats['rtd']['max'] = np.max(data['rtd'][i])
-                if np.min(data['rtd'][i])<stats['rtd']['min']:
-                    stats['rtd']['min'] = np.min(data['rtd'][i])
-                if np.max(data['mr'][i])>stats['mr']['max']:
-                    stats['mr']['max'] = np.max(data['mr'][i])
-                if np.min(data['mr'][i])<stats['mr']['min']:
-                    stats['mr']['min'] = np.min(data['mr'][i])  
-            labels.extend(data['label'])
     
-    for i in range(len(images)):
-        images[i][0] = (images[i][0] - stats['mr']['min']) / (stats['mr']['max'] - stats['mr']['min'])
-        images[i][1] = (images[i][1] - stats['rtd']['min']) / (stats['rtd']['max'] - stats['rtd']['min'])
-        images[i].append(wdt_fusion(images[i][0], images[i][1]))
+    # for i in range(len(images)):
+        # images[i][0] = (images[i][0] - stats['mr']['min']) / (stats['mr']['max'] - stats['mr']['min'])
+        # images[i][1] = (images[i][1] - stats['rtd']['min']) / (stats['rtd']['max'] - stats['rtd']['min'])
+        # images[i].append(wdt_fusion(images[i][0], images[i][1]))
+        # images[i].append(data['mask'][i])
     
-    for i in range(30):
-        print(f'\r{i+1}/{len(images)}', end='')
-        plot(images[i], labels[i], i)
+    keys = ['mr', 'rtd']
+    
+    tot_samples = len(data['mr'])
+    
+    for i in range(tot_samples):
+        print(f'\r{i+1}/{tot_samples}', end='')
+        plot(data, keys, i)
