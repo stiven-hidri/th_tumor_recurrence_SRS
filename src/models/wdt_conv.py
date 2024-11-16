@@ -17,7 +17,7 @@ def generate_resnet34_3d(cuda=True):
     return model
             
 class WDTConv(nn.Module):
-    def __init__(self, dropout = .1, use_clinical_data=True, out_dim_backbone=512, hidden_size_cd=10, hidden_size_fc1 = 256, hidden_size_fc = 256):
+    def __init__(self, dropout = .1, use_clinical_data=True, out_dim_backbone=512, hidden_size_cd=64, hidden_size_fc1 = 256, hidden_size_fc = 256):
         super(WDTConv, self).__init__()
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

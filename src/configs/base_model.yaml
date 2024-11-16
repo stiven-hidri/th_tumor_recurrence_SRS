@@ -15,11 +15,11 @@ model:
   only_test: False
   lf: fl          #wbce, bce, fl
   use_clinical_data: True
-  alpha_fl: .1
+  alpha_fl: .2
   gamma_fl: 2
   pos_weight: .3
   augmentation_techniques: ['random_affine', 'shear', 'random_rotate', 'random_flip']
-  p_augmentation: 1.
+  p_augmentation: .9
   depth_attention: 1.
 logger:
   log_dir: ./log

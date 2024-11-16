@@ -32,7 +32,7 @@ class ClassificationModule(LightningModule):
         elif name == 'wdt_conv':
             self.model = WDTConv(dropout=dropout, use_clinical_data=use_clinical_data)
         elif name == 'base_model':
-            self.model = BaseModel(dropout=dropout, use_clinical_data=use_clinical_data)
+            self.model = BaseModel(dropout=dropout, use_clinical_data=use_clinical_data, out_dim_clincal_features=64)
         elif name == 'conv_rnn':
             self.model = ConvRNN(dropout=dropout, rnn_type=rnn_type, hidden_size=hidden_size, num_layers=num_layers, use_clinical_data=use_clinical_data)
         elif name == 'conv_lstm':
@@ -257,7 +257,7 @@ class ClassificationModule(LightningModule):
 
     def on_test_epoch_end(self):
         # Aggregate and log metrics across all batches
-        performance = self.calculate_statistics(self.test_stuff['predictions'], self.test_stuff['labels'], (self.validation_best_threshold + self.training_best_threshold)/2)
+        performance = self.calculate_statistics(self.test_stuff['predictions'], self.test_stuff['labels'], self.validation_best_threshold)
         
         self.log('test_f1', performance['f1_score'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
         self.log('test_precision', performance['precision'], logger=True, prog_bar=True, on_step=False, on_epoch=True)

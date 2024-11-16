@@ -9,8 +9,8 @@ model:
   rnn_type: None
   hidden_size: 0
   num_layers: 1
-  lr: 1e-2
-  weight_decay: 1e-2
+  lr: 5e-4
+  weight_decay: 1e-4
   dropout: 0.3
   only_test: False
   use_clinical_data: True
@@ -19,7 +19,7 @@ model:
   gamma_fl: 2
   pos_weight: .8
   augmentation_techniques: ['shear',  'gaussian_noise', 'brightness']
-  p_augmentation: .0
+  p_augmentation: 1.
   depth_attention: .3
 logger:
   log_dir: ./log

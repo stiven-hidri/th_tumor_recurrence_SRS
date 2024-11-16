@@ -6,7 +6,7 @@ import os
 import torch.nn.init as init
 
 class BaseModel_EnhancedV2(nn.Module):
-    def __init__(self, dropout=.3, out_dim_clincal_features=10, use_clinical_data=True, out_dim_cnn=256, hidden_size_fc1=256, hidden_size_fc=256):
+    def __init__(self, dropout=.3, out_dim_clincal_features=64, use_clinical_data=True, out_dim_cnn=256, hidden_size_fc1=256, hidden_size_fc=256):
         super(BaseModel_EnhancedV2, self).__init__()
         
         self.use_clinical_data = use_clinical_data
@@ -66,16 +66,16 @@ class BaseModel_EnhancedV2(nn.Module):
                 
         input_dim = out_dim_cnn*2 + out_dim_clincal_features if self.use_clinical_data else out_dim_cnn*2
             
-        self.dropout = nn.Dropout(p=dropout)
-        self.relu = nn.ReLU()
+        # self.dropout = nn.Dropout(p=dropout)
+        # self.relu = nn.ReLU()
         
-        self.final_fc1 = nn.Linear(input_dim, hidden_size_fc)
-        self.bn1 = nn.BatchNorm1d(hidden_size_fc)
+        # self.final_fc1 = nn.Linear(input_dim, hidden_size_fc)
+        # self.bn1 = nn.BatchNorm1d(hidden_size_fc)
         
         # self.final_fc2 = nn.Linear(hidden_size_fc1, hidden_size_fc2)
         # self.bn2 = nn.BatchNorm1d(hidden_size_fc2)        
         
-        self.final_fc = nn.Linear(hidden_size_fc, 1)
+        self.final_fc = nn.Linear(input_dim, 1)
         
     def forward(self, les_input, dose_input, clinical_input=None):
         
@@ -120,8 +120,8 @@ class BaseModel_EnhancedV2(nn.Module):
         else:
             combined = torch.cat((les_output, dose_output), dim=1)
         
-        out = self.dropout(self.relu(self.bn1(self.final_fc1(combined))))
-        # out = self.dropout(self.relu(self.bn2(self.final_fc2(out))))
-        out = self.final_fc(out)
+        # out = self.dropout(self.relu(self.bn1(self.final_fc1(combined))))
+        
+        out = self.final_fc(combined)
         
         return out

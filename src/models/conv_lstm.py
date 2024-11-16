@@ -38,7 +38,7 @@ class BackboneCNN(nn.Module):
 
 # LSTM Model
 class ConvLSTM(nn.Module):
-    def __init__(self, dropout:.3, hidden_size=64, num_layers = 2, backbone_output_feat = 512, clinical_data_output_dim = 10, use_clinical_data=True):
+    def __init__(self, dropout:.3, hidden_size=64, num_layers = 2, backbone_output_feat = 512, clinical_data_output_dim = 64, use_clinical_data=True):
         super(ConvLSTM, self).__init__()
         self.use_clinical_data=use_clinical_data
         self.backbone = BackboneCNN(out_features=backbone_output_feat)

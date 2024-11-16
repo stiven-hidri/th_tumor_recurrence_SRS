@@ -385,7 +385,7 @@ class ClassifierDataset(Dataset):
         val_set = self.__one_hot__(val_set, self.max_values)
         test_set = self.__one_hot__(test_set, self.max_values)
         
-        train_set = self.__augment_by_flipping__(train_set)
+        # train_set = self.__augment_by_flipping__(train_set)
         
         return ClassifierDatasetSplit(model_name=self.model_name, data=train_set, split_name="train"), ClassifierDatasetSplit(model_name=self.model_name, data=val_set, split_name="val"), ClassifierDatasetSplit(model_name=self.model_name, data=test_set, split_name="test")
 

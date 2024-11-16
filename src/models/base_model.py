@@ -6,7 +6,7 @@ import os
 import torch.nn.init as init
 
 class BaseModel(nn.Module):
-    def __init__(self, dropout=.3, out_dim_clincal_features=10, use_clinical_data=True):
+    def __init__(self, dropout=.3, out_dim_clincal_features=64, use_clinical_data=True):
         super(BaseModel, self).__init__()
         
         self.use_clinical_data = use_clinical_data
@@ -91,6 +91,9 @@ class BaseModel(nn.Module):
             clinical_output = self.cd_backbone(clinical_input)
 
             if clinical_output.dim() == 1:
+                print(clinical_output.shape)
+                print(les_input.shape)
+                print(les_output.shape)
                 clinical_output = clinical_output.unsqueeze(0)
 
             combined = torch.cat((les_output, dose_output, clinical_output), dim=1)

@@ -1,6 +1,7 @@
 from itertools import product
 import pprint
 import re
+import shutil
 from lightning.pytorch import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
@@ -57,6 +58,13 @@ model_parameters_toshow = [
     "gamma_fl",
     "p_augmentation",
 ]
+
+def delete_checkpoints(experiment_name, log_dir):
+    experiment_path = os.path.join(log_dir, experiment_name)
+    for dir_name in os.listdir(experiment_path):
+        dir_path = os.path.join(experiment_path, dir_name)
+        if os.path.isdir(dir_path):
+            shutil.rmtree(dir_path)
 
 def load_checkpoint(config, checkpoint_cb, fold, version):
     if checkpoint_cb.best_model_path:
@@ -245,6 +253,8 @@ if __name__ == '__main__':
                 test_predictions['true_labels'].extend(result["labels"])
                 test_predictions['predictions'].extend(result["predictions"])
             
+            delete_checkpoints(config.logger.experiment_name, log_dir=config.logger.log_dir)
+            
         performance = calculate_statistics(test_predictions['label_predicted'], test_predictions['true_labels'], test_predictions['predictions'])
         
         # Append this result to results_list
@@ -257,6 +267,8 @@ if __name__ == '__main__':
             
         results_list.append(result_dict)
         version += 1
+
+    os.rmdir(os.path.join(config.logger.log_dir, config.logger.experiment_name))
 
     # Convert the results list to a pandas DataFrame
     df_results = pd.DataFrame(results_list)
