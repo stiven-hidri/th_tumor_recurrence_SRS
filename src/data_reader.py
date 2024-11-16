@@ -2,6 +2,7 @@ import argparse
 import os
 import pickle
 import pprint
+import re
 import pandas as pd
 import numpy as np
 from rt_utils import RTStructBuilder
@@ -76,7 +77,7 @@ class RawData_Reader():
             self.__clean_output_directory__(self.OUTPUT_PROCESSED_DATA_FOLDER_PATH)
         
         if debug:
-            metadata_by_subjectid = self.rawdata_meta[(self.rawdata_meta['subject_id'] == 'GK_467') | (self.rawdata_meta['subject_id'] == 'GK_492')].groupby(['subject_id'])
+            metadata_by_subjectid = self.rawdata_meta[(self.rawdata_meta['subject_id'] == 'GK_243')].groupby(['subject_id'])
         else:
             metadata_by_subjectid = self.rawdata_meta.groupby(['subject_id'])
             
@@ -230,7 +231,9 @@ class RawData_Reader():
         
         lesion_location_with_nrrdfilename = self.clinical_data.loc[(self.clinical_data['subject_id'] == subject_id) & (self.clinical_data['course'] == course), ['roi', 'nrrd_filename']].values    
 
-        roinrrd_roicd = { e[1].split('_')[-1] :e[0] for e in lesion_location_with_nrrdfilename }
+        pattern = r'(GK\.\d{3}_\d_L)'
+
+        roinrrd_roicd = { re.split(pattern, e[1])[-1] :e[0] for e in lesion_location_with_nrrdfilename }
         roi_rts = [ roi_rts for roi_rts in rtstruct.get_roi_names() if "*" not in roi_rts]
         roinrrd = list(roinrrd_roicd.keys())
         
