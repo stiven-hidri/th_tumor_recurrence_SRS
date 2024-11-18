@@ -370,8 +370,6 @@ class ClassifierDataset(Dataset):
         return ClassifierDatasetSplit(model_name=self.model_name, data=train_set, split_name="train"), ClassifierDatasetSplit(model_name=self.model_name, data=val_set, split_name="val"), ClassifierDatasetSplit(model_name=self.model_name, data=test_set, split_name="test")
     
     def create_split_whole_dataset(self, train_idx, test_idx) -> list[list[ClassifierDatasetSplit]]:    
-/*************  ✨ Codeium Command ⭐  *************/
-/******  7fc196d6-c4fc-4cf6-b711-9f69d4fbc46e  *******/
         inner_cv = StratifiedGroupKFold(n_splits=6)
             
         train_outer = self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], train_idx)
