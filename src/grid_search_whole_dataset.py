@@ -48,6 +48,7 @@ model_parameters = [
 
 model_parameters_toshow = [ 
     "batch_size",
+    "rnn_type",
     "hidden_size",
     "num_layers",
     "lr",
@@ -57,6 +58,7 @@ model_parameters_toshow = [
     "alpha_fl",
     "gamma_fl",
     "p_augmentation",
+    "depth_attention"
 ]
 
 def delete_checkpoints(experiment_name, log_dir):

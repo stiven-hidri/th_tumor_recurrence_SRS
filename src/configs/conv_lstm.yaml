@@ -3,24 +3,24 @@ dataset:
 model:
   name: conv_lstm
   epochs: 150
-  batch_size: 2
+  batch_size: 1
   optimizer: adam
   scheduler: plateau
-  rnn_type: none
+  rnn_type: gru
   hidden_size: 45
   num_layers: 2
-  lr: 1e-4
+  lr: 1e-5
   weight_decay: 1e-3
-  dropout: .1
+  dropout: .3
   only_test: False
   use_clinical_data: True
   lf: fl          #wbce, bce, fl
-  alpha_fl: .1
+  alpha_fl: .9
   gamma_fl: 2
   pos_weight: .9
   augmentation_techniques: ['random_affine', 'shear', 'random_rotate', 'random_flip']
-  p_augmentation: 1.
-  depth_attention: .4
+  p_augmentation: .9
+  depth_attention: 4
 logger:
   log_dir: ./log
   experiment_name: conv_lstm_1_cd_gridsearch

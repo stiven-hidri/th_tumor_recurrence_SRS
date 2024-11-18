@@ -65,17 +65,14 @@ class BaseModel_EnhancedV2(nn.Module):
             self.cd_backbone.final_fc = nn.Identity()
                 
         input_dim = out_dim_cnn*2 + out_dim_clincal_features if self.use_clinical_data else out_dim_cnn*2
-            
-        # self.dropout = nn.Dropout(p=dropout)
-        # self.relu = nn.ReLU()
         
-        # self.final_fc1 = nn.Linear(input_dim, hidden_size_fc)
-        # self.bn1 = nn.BatchNorm1d(hidden_size_fc)
+        self.fc1 = nn.Sequential(
+            nn.Linear(input_dim, hidden_size_fc1),
+            nn.ReLU(),
+            nn.Dropout(dropout)  # Regularization
+        )     
         
-        # self.final_fc2 = nn.Linear(hidden_size_fc1, hidden_size_fc2)
-        # self.bn2 = nn.BatchNorm1d(hidden_size_fc2)        
-        
-        self.final_fc = nn.Linear(input_dim, 1)
+        self.final_fc = nn.Linear(hidden_size_fc1, 1)
         
     def forward(self, les_input, dose_input, clinical_input=None):
         
@@ -86,10 +83,10 @@ class BaseModel_EnhancedV2(nn.Module):
             clinical_input = clinical_input.squeeze()
         
         # Lesion branch
-        x = self.les_pool1(F.relu(self.les_bn1(self.les_conv1(les_input))))        
-        x = self.les_pool2(F.relu(self.les_bn2(self.les_conv2(x))))
-        x = self.les_pool3(F.relu(self.les_bn3(self.les_conv3(x))))
-        x = self.les_pool4(F.relu(self.les_bn4(self.les_conv4(x))))
+        x = self.les_bn1(self.les_pool1(F.relu(self.les_conv1(les_input))))        
+        x = self.les_bn2(self.les_pool2(F.relu(self.les_conv2(x))))
+        x = self.les_bn3(self.les_pool3(F.relu(self.les_conv3(x))))
+        x = self.les_bn4(self.les_pool4(F.relu(self.les_conv4(x))))
         
         x = self.les_global_pool(x).view(x.size(0), -1)
         
@@ -97,14 +94,14 @@ class BaseModel_EnhancedV2(nn.Module):
         les_output = F.relu(self.les_fc2(x))
         
         # Dose branch
-        x = self.dose_pool1(F.relu(self.dose_bn1(self.dose_conv1(dose_input))))
-        x = self.dose_pool2(F.relu(self.dose_bn2(self.dose_conv2(x))))
-        x = self.dose_pool3(F.relu(self.dose_bn3(self.dose_conv3(x))))
-        x = self.dose_pool4(F.relu(self.dose_bn4(self.dose_conv4(x))))
+        x = self.dose_bn1(self.dose_pool1(F.relu(self.dose_conv1(dose_input))))
+        x = self.dose_bn2(self.dose_pool2(F.relu(self.dose_conv2(x))))
+        x = self.dose_bn3(self.dose_pool3(F.relu(self.dose_conv3(x))))
+        x = self.dose_bn4(self.dose_pool4(F.relu(self.dose_conv4(x))))
         
         x = self.dose_global_pool(x).view(x.size(0), -1)
-        
         x = self.dose_dropout(F.relu(self.dose_fc1(x)))
+        
         dose_output = F.relu(self.dose_fc2(x))
         
         # Clinical branch
@@ -120,8 +117,8 @@ class BaseModel_EnhancedV2(nn.Module):
         else:
             combined = torch.cat((les_output, dose_output), dim=1)
         
-        # out = self.dropout(self.relu(self.bn1(self.final_fc1(combined))))
+        out = self.fc1(combined)
         
-        out = self.final_fc(combined)
+        out = self.final_fc(out)
         
         return out

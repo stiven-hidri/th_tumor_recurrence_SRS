@@ -81,13 +81,19 @@ class MlpCD(nn.Module):
         if x.dim() == 1:
             x = x.unsqueeze(0)
         
-        # Input -> First hidden layer
-        x = F.relu(self.bn1(self.fc1(x)))
-        x = self.dropout1(x)
-        
-        # Second hidden layer
-        x = F.relu(self.bn2(self.fc2(x)))
-        x = self.dropout2(x)
+        if x.shape[0] == 1:
+            x = F.relu(self.fc1(x))
+            x = self.dropout1(x)
+            x = F.relu(self.fc2(x))
+            x = self.dropout2(x)
+        else:
+            # Input -> First hidden layer
+            x = F.relu(self.bn1(self.fc1(x)))
+            x = self.dropout1(x)
+            
+            # Second hidden layer
+            x = F.relu(self.bn2(self.fc2(x)))
+            x = self.dropout2(x)
         
         # Output layer
         x = self.final_fc(x)  # Use sigmoid or softmax if needed outside the model

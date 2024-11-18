@@ -20,7 +20,7 @@ model:
   pos_weight: .8
   augmentation_techniques: ['random_affine', 'shear', 'random_rotate', 'random_flip']
   p_augmentation: .3
-  depth_attention: .3
+  depth_attention: 3
 logger:
   log_dir: ./log
   experiment_name: train_base_model

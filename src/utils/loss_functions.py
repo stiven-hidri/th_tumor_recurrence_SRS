@@ -19,13 +19,6 @@ class FocalLoss(nn.Module):
         pt = torch.exp(-BCE_loss)
         loss = at*(1-pt)**self.gamma * BCE_loss
         
-        # pred_sigmoid = torch.sigmoid(logits)
-        
-        # pt = (1 - pred_sigmoid) * targets + pred_sigmoid * (1 - targets)
-        
-        # focal_weight = (self.alpha * targets + (1 - self.alpha) *(1 - targets)) * pt.pow(self.gamma)
-        # loss = F.binary_cross_entropy_with_logits(logits, targets, reduction='none') * focal_weight
-        
         return loss.mean()
 
 class BCELoss(nn.Module):

@@ -26,7 +26,7 @@ class ModelConfig(BaseModel):
     only_test: bool
     augmentation_techniques: list
     p_augmentation: float
-    depth_attention : float
+    depth_attention : int
     save_images: Optional[Path] = None
     pretrained: Optional[Path] = None
     annotations: Optional[Path] = None
@@ -37,7 +37,7 @@ class LoggerConfig(BaseModel):
     experiment_name: str
     version: int
     keep_test: Optional[bool] = False
-    k: Optional[int] = 6
+    k: Optional[int] = 10
     majority_vote: Optional[bool] = False
 
 class CheckpointConfig(BaseModel):

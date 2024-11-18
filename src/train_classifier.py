@@ -23,7 +23,7 @@ if __name__ == '__main__':
     train_set.augmentation_techniques = []
     train_set.p_augmentation = config.model.p_augmentation
     
-    torch.manual_seed(42)
+    # torch.manual_seed(42)
     
     train_dataloader = DataLoader(train_set, batch_size=config.model.batch_size, shuffle=True, num_workers=4, persistent_workers=True)
     val_dataloader = DataLoader(val_set, batch_size=config.model.batch_size, num_workers=4, persistent_workers=True)

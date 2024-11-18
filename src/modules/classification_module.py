@@ -16,7 +16,7 @@ from utils.loss_functions import BCELoss, WeightedBCELoss, FocalLoss
 from sklearn.metrics import roc_auc_score
 
 class ClassificationModule(LightningModule):
-    def __init__(self, name: str, epochs: int, lr: float, optimizer: str, scheduler: str, weight_decay: float, lf:str, pos_weight:float, dropout: float, use_clinical_data:bool, alpha_fl:float, gamma_fl:float, rnn_type: str, hidden_size: int, num_layers: int, experiment_name: str, version: int, augmentation_techniques: list, p_augmentation: float, depth_attention: float):
+    def __init__(self, name: str, epochs: int, lr: float, optimizer: str, scheduler: str, weight_decay: float, lf:str, pos_weight:float, dropout: float, use_clinical_data:bool, alpha_fl:float, gamma_fl:float, rnn_type: str, hidden_size: int, num_layers: int, experiment_name: str, version: int, augmentation_techniques: list, p_augmentation: float, depth_attention: int):
         super().__init__()
         self.save_hyperparameters()
         self.name = name
@@ -32,11 +32,11 @@ class ClassificationModule(LightningModule):
         elif name == 'wdt_conv':
             self.model = WDTConv(dropout=dropout, use_clinical_data=use_clinical_data)
         elif name == 'base_model':
-            self.model = BaseModel(dropout=dropout, use_clinical_data=use_clinical_data, out_dim_clincal_features=64)
+            self.model = BaseModel(dropout=dropout, use_clinical_data=use_clinical_data)
         elif name == 'conv_rnn':
             self.model = ConvRNN(dropout=dropout, rnn_type=rnn_type, hidden_size=hidden_size, num_layers=num_layers, use_clinical_data=use_clinical_data)
         elif name == 'conv_lstm':
-            self.model = ConvLSTM(dropout=dropout, hidden_size=hidden_size, num_layers=num_layers, use_clinical_data=use_clinical_data)
+            self.model = ConvLSTM(dropout=dropout, hidden_size=hidden_size, num_layers=num_layers, use_clinical_data=use_clinical_data, rnn_type=rnn_type)
         elif name == 'mlp_cd':
             self.model = MlpCD(dropout=dropout, pretrained=False)
         else:

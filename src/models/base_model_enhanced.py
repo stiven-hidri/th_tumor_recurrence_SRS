@@ -28,14 +28,14 @@ def generate_resnet34_3d(cuda=True, pretrain_path=os.path.join(os.path.dirname(_
     return model
             
 class BaseModel_Enhanced(nn.Module):
-    def __init__(self, dropout = .1, use_clinical_data=True, out_dim_backbone=512, hidden_size_cd=10, hidden_size_fc1 = 512, hidden_size_fc = 256):
+    def __init__(self, dropout = .1, use_clinical_data=True, out_dim_backbone=512, out_dim_clincal_features=10, hidden_size_fc1 = 512, hidden_size_fc = 256):
         super(BaseModel_Enhanced, self).__init__()
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.use_clinical_data = use_clinical_data
         
-        input_dim = out_dim_backbone*2 + hidden_size_cd if self.use_clinical_data else out_dim_backbone*2
+        input_dim = out_dim_backbone*2 + out_dim_clincal_features if self.use_clinical_data else out_dim_backbone*2
 
         self.backbone = generate_resnet34_3d()
         

@@ -91,9 +91,6 @@ class BaseModel(nn.Module):
             clinical_output = self.cd_backbone(clinical_input)
 
             if clinical_output.dim() == 1:
-                print(clinical_output.shape)
-                print(les_input.shape)
-                print(les_output.shape)
                 clinical_output = clinical_output.unsqueeze(0)
 
             combined = torch.cat((les_output, dose_output, clinical_output), dim=1)
