@@ -96,7 +96,7 @@ class PatchEmbedding(nn.Module):
         self.final_feat_dim = emb_size + out_dim_clincal_features if use_clinical_data else emb_size
         
         self.cls_token = nn.Parameter(torch.randn(1, 1, self.final_feat_dim))
-        # self.positions = nn.Parameter(torch.randn(n_modalities * depth_img * self.patch_size ** 2 // num_channels + 1, self.final_feat_dim))
+        self.positions = nn.Parameter(torch.randn(n_modalities * depth_img * self.patch_size ** 2 // num_channels + 1, self.final_feat_dim))
 
     def forward(self, input_transformer) -> torch.Tensor:
         # Process MR and RTD through the patch embedding layers
@@ -130,7 +130,7 @@ class PatchEmbedding(nn.Module):
         x = torch.cat((cls_token, patch_embeddings), dim=1)  # Shape: [batch_size, num_patches + 1, emb_size]
         
         # Add positional embeddings
-        # x += self.positions
+        x += self.positions
         
         return x
 
@@ -143,7 +143,7 @@ class DeiT(nn.Sequential):
         )
 
 class TransMedModel(nn.Module):
-    def __init__(self, patch_size=1, emb_size=512, n_classes=1, use_clinical_data=False, out_dim_clincal_features=64, dropout=.1, depth_attention = 12):
+    def __init__(self, patch_size=2, emb_size=512, n_classes=1, use_clinical_data=False, out_dim_clincal_features=64, dropout=.1, depth_attention = 12):
         super(TransMedModel, self).__init__()
         
         # Define patch size

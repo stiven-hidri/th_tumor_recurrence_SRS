@@ -33,17 +33,16 @@ class WDTConv(nn.Module):
             
             self.cd_backbone.final_fc = nn.Identity()  
         
-            # self.fc1 = nn.Sequential(
-            #     nn.Linear(input_dim, hidden_size_fc1),
-            #     nn.ReLU(),
-            #     nn.Dropout(dropout)  # Regularization
-            # )     
+            self.fc1 = nn.Sequential(
+                nn.Linear(input_dim, hidden_size_fc1),
+                nn.ReLU(),
+                nn.Dropout(dropout)  # Regularization
+            )     
             
-            # self.final_fc = nn.Linear(hidden_size_fc1, 1)
+            self.final_fc = nn.Linear(hidden_size_fc1, 1)
         
-        # else:
-        
-        self.final_fc = nn.Linear(input_dim, 1)
+        else:
+            self.final_fc = nn.Linear(input_dim, 1)
         
     
     def forward(self, mr_rtd_fusion, clinical_data):
@@ -53,11 +52,7 @@ class WDTConv(nn.Module):
         
         if self.use_clinical_data:
             feat = torch.cat([feat, self.cd_backbone(clinical_data)], dim=1)
-        
-        # if self.use_clinical_data:
-        #     out = self.fc1(feat)
-        #     out = self.final_fc(out)
-        # else:
+            feat = self.fc1(feat)
         
         out = self.final_fc(feat)
 

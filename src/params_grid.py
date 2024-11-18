@@ -8,12 +8,12 @@ param_grid_mlpcd = {
     'weight_decay':         [ 1e-4, 1e-3 ],
     'p_augmentation':       [ .9 ],
     
-    'alpha_fl':             [ .2, .8 ],
+    'alpha_fl':             [ .2 ],
     'gamma_fl':             [ 2, 3 ]
 }
 
 param_grid_basemodel = {
-    'lr':                   [5e-4, 1e-4],
+    'lr':                   [1e-4],
     'batch_size':           [32],
     
     'dropout':              [.1, .3],
@@ -22,7 +22,7 @@ param_grid_basemodel = {
     
     'use_clinical_data':    [ False, True ],
     
-    'alpha_fl':             [ .2, .8 ],
+    'alpha_fl':             [ .2 ],
     'gamma_fl':             [2, 3],
 }
 
@@ -37,7 +37,7 @@ param_grid_wdt = {
     
     'use_clinical_data':    [ True, False ],
     
-    'alpha_fl':             [ .2, .8 ],
+    'alpha_fl':             [ .2 ],
     'gamma_fl':             [ 2, 3 ],
 }
 
@@ -69,7 +69,7 @@ param_grid_transmed = {
     
     'use_clinical_data':    [ True, False ],
     
-    'depth_attention':      [ 6,8, 10 ],
+    'depth_attention':      [ 6, 8, 10 ],
     
     'alpha_fl':             [ .2 ],
     'gamma_fl':             [ 2, 3 ],   

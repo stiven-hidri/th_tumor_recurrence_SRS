@@ -66,13 +66,13 @@ class BaseModel_EnhancedV2(nn.Module):
                 
         input_dim = out_dim_cnn*2 + out_dim_clincal_features if self.use_clinical_data else out_dim_cnn*2
         
-        self.fc1 = nn.Sequential(
-            nn.Linear(input_dim, hidden_size_fc1),
-            nn.ReLU(),
-            nn.Dropout(dropout)  # Regularization
-        )     
+        # self.fc1 = nn.Sequential(
+        #     nn.Linear(input_dim, hidden_size_fc1),
+        #     nn.ReLU(),
+        #     nn.Dropout(dropout)  # Regularization
+        # )     
         
-        self.final_fc = nn.Linear(hidden_size_fc1, 1)
+        self.final_fc = nn.Linear(input_dim, 1)
         
     def forward(self, les_input, dose_input, clinical_input=None):
         
@@ -117,8 +117,8 @@ class BaseModel_EnhancedV2(nn.Module):
         else:
             combined = torch.cat((les_output, dose_output), dim=1)
         
-        out = self.fc1(combined)
+        # out = self.fc1(combined)
         
-        out = self.final_fc(out)
+        out = self.final_fc(combined)
         
         return out

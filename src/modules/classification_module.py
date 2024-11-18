@@ -294,6 +294,10 @@ class ClassificationModule(LightningModule):
         elif self.optimizer == 'sgd':
             print("Using SGD optimizer")
             optimizers = torch.optim.SGD(self.parameters(), lr = self.lr, momentum=.7, weight_decay=self.weight_decay)
+        
+        elif self.optimizer == 'RMSprop':
+            print("Using RMSprop optimizer")
+            optimizers = torch.optim.RMSprop(self.parameters(), lr=self.lr, alpha=0.99, eps=1e-8, momentum=0.9, weight_decay=self.weight_decay)
             
         ##Schedulers
         

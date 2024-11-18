@@ -88,7 +88,7 @@ class ClassifierDataset(Dataset):
 
         fused_image_e = pywt.idwtn(fused_details_e, 'db1', axes=(0, 1, 2))
         
-        fused_image_e = torch.Tensor(fused_image_e).to(torch.float32) * ( mr > 0 )
+        fused_image_e = torch.Tensor(fused_image_e).to(torch.float32)
         return fused_image_e
 
     def __augment_by_flipping__(self, split):
@@ -310,7 +310,7 @@ class ClassifierDataset(Dataset):
         
         print('Dataset is loaded')
     
-    def return_data_dictionary(self, mr, rtd, clinical_data, labels, subjects, idx, mr_rtd_fusion=None, tensor_conversion = True):
+    def return_data_dictionary(self, mr, rtd, clinical_data, labels, subjects, idx, tensor_conversion = True):
         if tensor_conversion:
             data_dictionary = {
                 "mr": [torch.Tensor(mr[i]).to(torch.float32) for i in idx],
@@ -342,7 +342,8 @@ class ClassifierDataset(Dataset):
         self.global_data['clinical_data'] = [ self.global_data['clinical_data'][idx] for idx in range(len(self.global_data['clinical_data'])) if idx not in test_idx]
     
     def __generate_mrrtdfusion__(self, split):
-        split['mr_rtd_fusion'] =  [self.__wdt_fusion__(split['mr'][i], split['rtd'][i]) for i in split['mr']],
+        split['mr_rtd_fusion'] = []
+        [split['mr_rtd_fusion'].append(self.__wdt_fusion__(np.array(split['mr'][i]), np.array(split['rtd'][i]))) for i in range(len(split['mr']))],
         return split
         
     def create_split_keep_test(self, train_idx, val_idx):
@@ -378,8 +379,8 @@ class ClassifierDataset(Dataset):
         # Use the first split as the train/validation division
         inner_train_idx, val_idx = next(inner_cv.split(train_outer['mr'], train_outer['label'], train_outer['subject_id']))
         
-        val_set = self.return_data_dictionary(train_outer['mr'], train_outer['rtd'], train_outer['clinical_data'], train_outer['label'], train_outer['subject_id'], val_idx, mr_rtd_fusion=train_outer['mr_rtd_fusion'],tensor_conversion=False)
-        train_set = self.return_data_dictionary(train_outer['mr'], train_outer['rtd'], train_outer['clinical_data'], train_outer['label'], train_outer['subject_id'], inner_train_idx, mr_rtd_fusion=train_outer['mr_rtd_fusion'], tensor_conversion=False)
+        val_set = self.return_data_dictionary(train_outer['mr'], train_outer['rtd'], train_outer['clinical_data'], train_outer['label'], train_outer['subject_id'], val_idx,tensor_conversion=False)
+        train_set = self.return_data_dictionary(train_outer['mr'], train_outer['rtd'], train_outer['clinical_data'], train_outer['label'], train_outer['subject_id'], inner_train_idx, tensor_conversion=False)
         
         statistics = self.__compute_statistics__(train_set)
         
@@ -418,8 +419,8 @@ class ClassifierDataset(Dataset):
         gss_inner = GroupShuffleSplit(n_splits=1, test_size=val_relative_size, random_state=42)
         train_idx, val_idx = next(gss_inner.split(train_val['mr'], train_val['label'], train_val['subject_id']))
         
-        train_set = self.return_data_dictionary(train_val['mr'], train_val['rtd'], train_val['clinical_data'], train_val['label'], train_val['subject_id'], train_idx, mr_rtd_fusion=train_val['mr_rtd_fusion'], tensor_conversion=False)
-        val_set = self.return_data_dictionary(train_val['mr'], train_val['rtd'], train_val['clinical_data'], train_val['label'], train_val['subject_id'], val_idx, mr_rtd_fusion=train_val['mr_rtd_fusion'], tensor_conversion=False)
+        train_set = self.return_data_dictionary(train_val['mr'], train_val['rtd'], train_val['clinical_data'], train_val['label'], train_val['subject_id'], train_idx, tensor_conversion=False)
+        val_set = self.return_data_dictionary(train_val['mr'], train_val['rtd'], train_val['clinical_data'], train_val['label'], train_val['subject_id'], val_idx, tensor_conversion=False)
         
         statistics = self.__compute_statistics__(train_set)
         
@@ -427,10 +428,14 @@ class ClassifierDataset(Dataset):
         val_set = self.__normalize__(val_set, statistics, f=self.__minmax_scaling__)
         test_set = self.__normalize__(test_set, statistics, f=self.__minmax_scaling__)
         
+        train_set = self.__generate_mrrtdfusion__(train_set)
+        val_set = self.__generate_mrrtdfusion__(val_set)
+        test_set = self.__generate_mrrtdfusion__(test_set)
+        
         train_set = self.__one_hot__(train_set, self.max_values)
         val_set = self.__one_hot__(val_set, self.max_values)
         test_set = self.__one_hot__(test_set, self.max_values)
         
-        train_set = self.__augment_by_flipping__(train_set)
+        # train_set = self.__augment_by_flipping__(train_set)
         
         return ClassifierDatasetSplit(model_name=self.model_name, data=train_set, split_name="train"), ClassifierDatasetSplit(model_name=self.model_name, data=val_set, split_name="val"), ClassifierDatasetSplit(model_name=self.model_name, data=test_set, split_name="test")
