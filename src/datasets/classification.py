@@ -13,14 +13,26 @@ import torch
 from sklearn import preprocessing
 import torch.nn.functional as F
 from scipy.ndimage import zoom
+import torchio as tio
 
 class ClassifierDatasetSplit(Dataset):
     def __init__(self, model_name:str, data:dict, split_name:str):
         self.data = data
         self.model_name = model_name
         self.split_name = split_name
-        self.p_augmentation = None
-        self.augmentation_techniques = None
+        if self.split_name == 'train':
+            self.transform_big = tio.Compose([
+                tio.RandomFlip(axes=(0, 1, 2), flip_probability=0.5),
+                tio.RandomElasticDeformation(
+                    num_control_points=7,
+                    max_displacement=5.0,
+                    locked_borders=2,
+                    image_interpolation='linear'
+                )
+            ])
+            self.transform_small = tio.Compose([
+                tio.RandomFlip(axes=(0, 1, 2), flip_probability=0.5)
+            ])
 
     def __len__(self):
         return len(self.data['label'])
@@ -33,7 +45,8 @@ class ClassifierDatasetSplit(Dataset):
             mr_rtd_fusion = self.data['mr_rtd_fusion'][idx]
             
             if self.split_name == 'train':
-                mr_rtd_fusion, _ = combine_aug(mr_rtd_fusion, None, p_augmentation=self.p_augmentation, augmentations_techinques=self.augmentation_techniques)
+                volume = torch.sum(mr > 0)
+                transformed_subject = self.transform_big(subject) if volume > 20**3 else self.transform_small(subject)
                 
             return mr_rtd_fusion, clinical_data, label
         else:
@@ -41,7 +54,16 @@ class ClassifierDatasetSplit(Dataset):
             rtd = self.data['rtd'][idx]
             
             if self.split_name == 'train':
-                mr, rtd = combine_aug(mr, rtd, p_augmentation=self.p_augmentation, augmentations_techinques=self.augmentation_techniques)
+                subject = tio.Subject(
+                    mr=tio.ScalarImage(tensor=mr), 
+                    rtd=tio.ScalarImage(tensor=rtd)
+                )
+                
+                volume = torch.sum(mr > 0)
+                transformed_subject = self.transform_big(subject) if volume > 20**3 else self.transform_small(subject)
+
+                mr = transformed_subject['mr'].data
+                rtd = transformed_subject['rtd'].data
                 
             return mr, rtd, clinical_data, label
 
