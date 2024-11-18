@@ -31,9 +31,9 @@ class Parser:
         self.parser.add_argument('--only_test', help='Set True to skip training', action='store_true', dest='ONLY_TEST')
         self.parser.add_argument('--augmentation_techniques', type=list, help='Augmentation techinques to apply', dest='AUGMENTATION_TECHNIQUES')
         self.parser.add_argument('--p_augmentation', type=float, help='Probability to augment', dest='P_AUGMENTATION')
-        self.parser.add_argument('--depth_attention', type=float, help='Probability to apply each technique', dest='DEPTH_ATTENTION')
+        self.parser.add_argument('--depth_attention', type=int, help='Probability to apply each technique', dest='DEPTH_ATTENTION')
         self.parser.add_argument('--keep_test', default=False, action='store_true', help='Probability to apply each technique', dest='KEEP_TEST')
-        self.parser.add_argument('--k', default=6, type=int, help='K-folds', dest='K')
+        self.parser.add_argument('--k', default=10, type=int, help='K-folds', dest='K')
         self.parser.add_argument('--majority_vote', default=False, action='store_true', help='Majority vote', dest='MAJORITY_VOTE')
 
         # Logger args

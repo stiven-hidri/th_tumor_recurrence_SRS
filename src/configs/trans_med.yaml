@@ -10,7 +10,7 @@ model:
   hidden_size: 0
   num_layers: 0
   lr: 1e-4
-  weight_decay: 1e-3
+  weight_decay: 1e-4
   dropout: .3
   only_test: False
   lf: fl          #wbce, bce, fl
@@ -19,8 +19,8 @@ model:
   gamma_fl: 2
   pos_weight: .8
   augmentation_techniques: ['random_affine', 'shear', 'random_rotate', 'random_flip']
-  p_augmentation: 1.
-  depth_attention: .3
+  p_augmentation: .9
+  depth_attention: 8
 logger:
   log_dir: ./log
   experiment_name: train_base_model

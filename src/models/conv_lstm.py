@@ -38,14 +38,17 @@ class BackboneCNN(nn.Module):
 
 # LSTM Model
 class ConvLSTM(nn.Module):
-    def __init__(self, dropout:.3, hidden_size=64, num_layers = 2, backbone_output_feat = 512, clinical_data_output_dim = 10, use_clinical_data=True):
+    def __init__(self, dropout:.3, hidden_size=64, num_layers = 2, backbone_output_feat = 512, out_dim_clincal_features = 64, use_clinical_data=True, rnn_type='lstm'):
         super(ConvLSTM, self).__init__()
         self.use_clinical_data=use_clinical_data
         self.backbone = BackboneCNN(out_features=backbone_output_feat)
         
-        self.input_dim_rnn = backbone_output_feat + clinical_data_output_dim if self.use_clinical_data else backbone_output_feat
+        self.input_dim_rnn = backbone_output_feat + out_dim_clincal_features if self.use_clinical_data else backbone_output_feat
             
-        self.lstm = LSTMModel(self.input_dim_rnn, hidden_dim=hidden_size, layer_dim=num_layers, dropout_prob=dropout)
+        if rnn_type == 'lstm':
+            self.rnn = LSTMModel(self.input_dim_rnn, hidden_dim=hidden_size, layer_dim=num_layers, dropout_prob=dropout)
+        elif rnn_type == 'gru':
+            self.rnn = GRUModel(self.input_dim_rnn, hidden_dim=hidden_size, layer_dim=num_layers, dropout_prob=dropout)
         
         self.hidden_size = hidden_size
         
@@ -74,10 +77,8 @@ class ConvLSTM(nn.Module):
         if self.use_clinical_data:
             features_clinical_data = self.cd_backbone(clinical_data).unsqueeze(1)
             features = torch.cat((features, features_clinical_data.expand(-1, features.shape[1], -1)), dim=2)
-        
-        lstm_output = self.layer_norm(self.lstm(features))
 
-        # lstm_output = self.lstm(features)
+        lstm_output = self.rnn(features)
         output = self.fc(lstm_output[:, -1, :])
 
         return output

@@ -6,7 +6,7 @@ import os
 import torch.nn.init as init
 
 class BaseModel(nn.Module):
-    def __init__(self, dropout=.3, out_dim_clincal_features=10, use_clinical_data=True):
+    def __init__(self, dropout=.3, out_dim_clincal_features=64, use_clinical_data=True):
         super(BaseModel, self).__init__()
         
         self.use_clinical_data = use_clinical_data

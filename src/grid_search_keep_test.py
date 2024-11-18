@@ -1,10 +1,11 @@
 from itertools import product
 import re
+import shutil
 from lightning.pytorch import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
 import pandas as pd
-from sklearn.metrics import auc, confusion_matrix, precision_recall_curve, roc_auc_score, roc_curve
+from sklearn.metrics import auc, confusion_matrix, precision_recall_curve, roc_auc_score
 import torch
 from torch.utils.data import DataLoader
 from utils import Parser
@@ -15,9 +16,8 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from sklearn.model_selection import StratifiedGroupKFold
 from params_grid import *
 import numpy as np
-from collections import defaultdict, Counter
-from argparse import ArgumentParser
-from sklearn.metrics import f1_score
+from collections import defaultdict
+from scipy.stats import mode
 
 torch.set_num_threads(8)
 # torch.cuda.set_per_process_memory_fraction(fraction=.33, device=None)
@@ -46,14 +46,17 @@ model_parameters = [
 
 model_parameters_toshow = [ 
     "batch_size",
+    "rnn_type",
     "hidden_size",
     "num_layers",
     "lr",
     "weight_decay",
     "dropout",
     "use_clinical_data",
+    "alpha_fl",
     "gamma_fl",
     "p_augmentation",
+    "depth_attention"
 ]
 
 def load_checkpoint(config, checkpoint_cb, fold, version):
@@ -86,45 +89,71 @@ def load_checkpoint(config, checkpoint_cb, fold, version):
         
     return module
 
-def calculate_statistics(pred_labels, true_labels, predictions):
-    C = confusion_matrix(true_labels, pred_labels)
+def delete_checkpoints(experiment_name, log_dir):
+    experiment_path = os.path.join(log_dir, experiment_name)
+    for dir_name in os.listdir(experiment_path):
+        dir_path = os.path.join(experiment_path, dir_name)
+        if os.path.isdir(dir_path):
+            shutil.rmtree(dir_path)
+
+def calculate_statistics(predicted_labels, true_labels, predictions=None, ensemble=True):
+    if ensemble:
+        if predictions is None:
+            prefix = "test_mj_"
+        else:
+            prefix = "test_avg_"
+    else:
+        prefix = ""
+    
+    C = confusion_matrix(true_labels, predicted_labels)
     TP, TN, FP, FN = C[1,1], C[0,0], C[0,1], C[1,0]
     
     recall = TP / (TP + FN) if (TP + FN) > 0 else 0
     precision = TP / (TP + FP) if (TP + FP) > 0 else 0
     
-    precision_curve, recall_curve, _ = precision_recall_curve(true_labels, predictions)
+    if predictions is None:
+        statistics = {
+            f"{prefix}_accuracy": round(((TP + TN) / (TP + TN + FP + FN)), 3) if (TP + TN + FP + FN) > 0 else 0,
+            f"{prefix}_recall": round(recall, 3),
+            f"{prefix}_specificity": round((TN / (TN + FP)), 3) if (TN + FP) > 0 else 0,
+            f"{prefix}_precision": round(precision, 3),
+            f"{prefix}_f1_score": round((2 * (precision * recall) / (precision + recall)), 3) if (precision + recall) > 0 else 0
+        }
+    else:    
+        precision_curve, recall_curve, _ = precision_recall_curve(true_labels, predictions)
+        roc_auc = roc_auc_score(true_labels, predictions)
         
-    statistics = {
-        "accuracy": (TP + TN) / (TP + TN + FP + FN) if (TP + TN + FP + FN) > 0 else 0,
-        "recall": recall,
-        "specificity": TN / (TN + FP) if (TN + FP) > 0 else 0,
-        "precision": precision,
-        "f1_score": 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0,
-        "pr_auc": auc(recall_curve, precision_curve)
-    }
+        statistics = {
+            f"{prefix}_accuracy": round(((TP + TN) / (TP + TN + FP + FN)), 3) if (TP + TN + FP + FN) > 0 else 0,
+            f"{prefix}_recall": round(recall, 3),
+            f"{prefix}_specificity": round((TN / (TN + FP)), 3) if (TN + FP) > 0 else 0,
+            f"{prefix}_precision": round(precision, 3),
+            f"{prefix}_f1_score": round((2 * (precision * recall) / (precision + recall)), 3) if (precision + recall) > 0 else 0,
+            f"{prefix}_pr_auc": round(auc(recall_curve, precision_curve), 3),
+            f"{prefix}_roc_auc": round(roc_auc, 3)
+        }
     
     return statistics
-    
-def get_alpha_fl(all_labels_dataloader):
-    all_labels = [int(l) for l in all_labels_dataloader]  # Adjust 'label' to your actual label field
-
-    positive_count = sum(all_labels)
-    
-    positive_freq = positive_count / len(all_labels)
-    
-    return positive_freq
     
 def calculate_mean_statistics(statistics):
     mean_statistics = {}
     n = float(len(statistics))
     
-    for key in statistics[0].keys():
-        s = 0.0
-        for element in statistics:
-            s+=float(element[key])
+    concatenated_statistics = {key: [s[key] for s in statistics] for key in statistics[0].keys()}
+
+    comprehansion = {}
+
+    for key in concatenated_statistics.keys():
+        elements = np.array(concatenated_statistics[key])
+        
+        mean = round(np.mean(elements), 3)
+        std = round(np.std(elements), 3)
+        minimum = round(np.min(elements), 3)
+        maximum = round(np.max(elements), 3)
             
-        mean_statistics["val_"+key] = float(s / n)
+        comprehansion[f"comprehension_{key}"] = f"{mean} ({minimum}, {maximum}) | std={std}"
+    
+    
         
     return mean_statistics
 
@@ -190,10 +219,10 @@ if __name__ == '__main__':
         torch.manual_seed(42)
         
         # Initialize list to collect test predictions for majority voting
-        test_predictions = defaultdict(list)
-        test_labels = None
-        val_thresholds = np.array([])
-        val_statistics = np.array([])
+        test_predictions = defaultdict([]) #for each fold save probabilities
+        performance_per_fold = defaultdict([])
+        thresholds = []
+        true_labels = []
         
         for attr, value in list(config.model.__dict__.items()):
             if attr not in param_grid.keys() and attr in model_parameters:
@@ -204,6 +233,9 @@ if __name__ == '__main__':
         for fold, (train_idx, val_idx) in enumerate(skf.split(classifier_dataset.global_data['mr'], classifier_dataset.global_data['label'], classifier_dataset.global_data['subject_id'])):
             
             train_set, val_set, test_set = classifier_dataset.create_split_keep_test(train_idx, val_idx)  
+            
+            if len(true_labels) == 0:
+                true_labels = [int(l) for l in test_set.data['label']]
             
             train_set.p_augmentation = p_augmentation
             train_set.augmentation_techniques = []
@@ -217,8 +249,6 @@ if __name__ == '__main__':
             
             param_set['experiment_name'] = config.logger.experiment_name
             param_set['version'] = version
-            
-            param_set['alpha_fl'] = get_alpha_fl(train_dataloader.dataset.data['label'])
 
             # Create the model with the current hyperparameters
             module = ClassificationModule(**param_set)
@@ -226,7 +256,7 @@ if __name__ == '__main__':
             # Checkpoint callback
             checkpoint_cb = ModelCheckpoint(monitor=config.checkpoint.monitor, dirpath=os.path.join(config.logger.log_dir, config.logger.experiment_name, f'version_{version}_fold_{fold}'), filename='{epoch:03d}_{' + config.checkpoint.monitor + ':.6f}', save_weights_only=True, save_top_k=config.checkpoint.save_top_k, mode=config.checkpoint.mode)
             
-            early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.01, patience=3, verbose=True, mode="min")
+            early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0., patience=3, verbose=True, mode="min")
 
             # Trainer
             trainer = Trainer(logger=logger, accelerator=device, devices=[0] if device == "gpu" else "auto", default_root_dir=config.logger.log_dir, max_epochs=config.model.epochs, check_val_every_n_epoch=1, callbacks=[checkpoint_cb, early_stop_callback], log_every_n_steps=1, num_sanity_val_steps=0,reload_dataloaders_every_n_epochs=1)
@@ -234,8 +264,8 @@ if __name__ == '__main__':
             # Train
             if not config.model.only_test:
                 trainer.fit(model=module, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
-                val_thresholds = np.append(val_thresholds, module.validation_best_threshold)
-                val_statistics = np.append(val_statistics, module.best_validation_statistics)
+                t = (module.validation_best_threshold + module.training_best_threshold)/ 2
+                thresholds = thresholds.append(t) #save threshold
 
             # Collect test predictions per fold if test set is available
             module = load_checkpoint(config, checkpoint_cb, fold, version)
@@ -243,56 +273,39 @@ if __name__ == '__main__':
             # Get test predictions
             test_results = trainer.predict(model=module, dataloaders=test_dataloader)
             
-            labels = []
-            cnt_prediction = 0
+            current_predictions = [p for batch_pred in test_results for p in batch_pred["predictions"]]
+            test_predictions[fold] = current_predictions
             
-            for result in test_results:
-                for sample_i, (p, l) in enumerate(zip(result["predictions"], result["labels"])):
-                    test_predictions[cnt_prediction].append(p.item())  # Collect predictions for each test sample
-                    cnt_prediction += 1
-                    if test_labels is None:
-                        labels.append(l.item())
+            current_predicted_labels = [1 if p >= t else 0 for p in current_predictions]
             
-            if test_labels is None:
-                test_labels = labels
+            current_performance = calculate_statistics(current_predicted_labels, true_labels, current_predictions)
+            
+            performance_per_fold[fold] = current_performance
 
-        # Perform majority voting
-        final_predicted_labels = []
+        final_threshold = sum(thresholds) / len(thresholds)
         
-        final_t = np.mean(val_thresholds)
+        #majority vote
         
-        final_val_statistics = calculate_mean_statistics(val_statistics)
+        predicted_labels_for_each_split =  np.array([ [ 1 if p >= final_threshold else 0 for p in v] for k, v in test_predictions.items()])
+        final_predicted_labels_majorityvote = mode(predicted_labels_for_each_split, axis=0).mode[0]
         
-        if config.logger.majority_vote:
-            for sample_idx, preds in test_predictions.items():
-                test_predictions[sample_idx] = [1 if p > final_t else 0 for p in preds]
+        averaged_predictions = np.mean(np.array(list(test_predictions.values())), axis=0)
+        final_predicted_labels_avgpredictions = [1 if p >= final_threshold else 0 for p in averaged_predictions]
             
-            for sample_idx, preds in test_predictions.items():
-                majority_vote = Counter(preds).most_common(1)[0][0]  # Majority vote
-                final_predicted_labels.append(majority_vote)
-                
-            final_test_statistics = calculate_statistics(final_predicted_labels, test_labels, )
-        else:
-            all_pred_labels = defaultdict(list)
-            all_predictions = defaultdict(list)
-            
-            for sample_idx, preds in test_predictions.items():
-                for i, pl in enumerate(test_predictions[sample_idx]):
-                    all_predictions[i].append(pl)
-                    all_pred_labels[i].append(1 if pl > final_t else 0)
-                    
-            all_test_statistics = [calculate_statistics(pl, test_labels, pred) for key in all_pred_labels.keys() for pl, pred in zip(all_pred_labels[key], all_predictions[key])]
-            
-            final_test_statistics = calculate_mean_statistics_test(all_test_statistics)
+        performance_majorityvote = calculate_statistics(final_predicted_labels_majorityvote, true_labels)
+        performance_avgpredictions = calculate_statistics(final_predicted_labels_avgpredictions, true_labels, averaged_predictions)
+        
+        averaged_performances = calculate_mean_statistics(list(performance_per_fold.values()))
             
         # Append this result to results_list
         result_dict = {
             'version': version,
             'batch_size': batch_size,
             **{k:val for k, val in param_set.items() if k in model_parameters_toshow},
-            'threshold':final_t,
-            **final_val_statistics,
-            **final_test_statistics
+            'threshold':final_threshold,
+            **performance_avgpredictions,
+            **performance_majorityvote,
+            **averaged_performances
         }
             
         results_list.append(result_dict)
