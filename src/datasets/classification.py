@@ -315,7 +315,6 @@ class ClassifierDataset(Dataset):
             data_dictionary = {
                 "mr": [torch.Tensor(mr[i]).to(torch.float32) for i in idx],
                 "rtd": [torch.Tensor(rtd[i]).to(torch.float32) for i in idx],
-                "mr_rtd_fusion": [self.__wdt_fusion__(mr[i], rtd[i]) for i in idx],
                 "clinical_data": [torch.Tensor(clinical_data[i]).to(torch.float32).view(-1, 1) for i in idx],
                 'label': torch.tensor([labels[i] for i in idx]).to(torch.float32).view(-1, 1),
                 'subject_id': [subjects[i] for i in idx]
@@ -324,7 +323,6 @@ class ClassifierDataset(Dataset):
             data_dictionary = {
                 "mr": [mr[i] for i in idx],
                 "rtd": [rtd[i] for i in idx],
-                "mr_rtd_fusion": [mr_rtd_fusion[i] for i in idx],
                 "clinical_data": [clinical_data[i] for i in idx],
                 'label': [labels[i] for i in idx ],
                 'subject_id': [subjects[i] for i in idx]
@@ -343,6 +341,10 @@ class ClassifierDataset(Dataset):
         self.global_data['subject_id'] = [ self.global_data['subject_id'][idx] for idx in range(len(self.global_data['subject_id'])) if idx not in test_idx]
         self.global_data['clinical_data'] = [ self.global_data['clinical_data'][idx] for idx in range(len(self.global_data['clinical_data'])) if idx not in test_idx]
     
+    def __generate_mrrtdfusion__(self, split):
+        split['mr_rtd_fusion'] =  [self.__wdt_fusion__(split['mr'][i], split['rtd'][i]) for i in split['mr']],
+        return split
+        
     def create_split_keep_test(self, train_idx, val_idx):
         
         train_set = self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], train_idx)
@@ -355,6 +357,10 @@ class ClassifierDataset(Dataset):
         val_set = self.__normalize__(val_set, statistics, f=self.__minmax_scaling__)
         test_set = self.__normalize__(test_set, statistics, f=self.__minmax_scaling__)
         
+        train_set = self.__generate_mrrtdfusion__(train_set)
+        val_set = self.__generate_mrrtdfusion__(val_set)
+        test_set = self.__generate_mrrtdfusion__(test_set)
+        
         train_set = self.__one_hot__(train_set, self.max_values)
         val_set = self.__one_hot__(val_set, self.max_values)
         test_set = self.__one_hot__(test_set, self.max_values)
@@ -364,6 +370,8 @@ class ClassifierDataset(Dataset):
         return ClassifierDatasetSplit(model_name=self.model_name, data=train_set, split_name="train"), ClassifierDatasetSplit(model_name=self.model_name, data=val_set, split_name="val"), ClassifierDatasetSplit(model_name=self.model_name, data=test_set, split_name="test")
     
     def create_split_whole_dataset(self, train_idx, test_idx) -> list[list[ClassifierDatasetSplit]]:    
+/*************  ✨ Codeium Command ⭐  *************/
+/******  7fc196d6-c4fc-4cf6-b711-9f69d4fbc46e  *******/
         inner_cv = StratifiedGroupKFold(n_splits=6)
             
         train_outer = self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], train_idx)
@@ -380,6 +388,10 @@ class ClassifierDataset(Dataset):
         train_set = self.__normalize__(train_set, statistics, f=self.__minmax_scaling__)
         val_set = self.__normalize__(val_set, statistics, f=self.__minmax_scaling__)
         test_set = self.__normalize__(test_set, statistics, f=self.__minmax_scaling__)
+        
+        train_set = self.__generate_mrrtdfusion__(train_set)
+        val_set = self.__generate_mrrtdfusion__(val_set)
+        test_set = self.__generate_mrrtdfusion__(test_set)
         
         train_set = self.__one_hot__(train_set, self.max_values)
         val_set = self.__one_hot__(val_set, self.max_values)

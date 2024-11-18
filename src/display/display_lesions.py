@@ -1,4 +1,5 @@
 import argparse
+import pprint
 import shutil
 import matplotlib.pyplot    as plt
 import numpy                as np
@@ -26,7 +27,7 @@ def plot(stuff, keys, progressive, c_init=6):
     fig = plt.figure(figsize=(13, 8))  # Optional: Smaller figure size
     plt.tight_layout(pad=0, w_pad=0, h_pad=0)  # Adjust values as needed
     
-    fig.suptitle(f'Label: {stuff["label"][progressive]}', fontsize=12)
+    # fig.suptitle(f'Label: {stuff["label"][progressive]}', fontsize=12)
 
     for i, key in enumerate(keys):
         image = stuff[key][progressive]
@@ -35,19 +36,14 @@ def plot(stuff, keys, progressive, c_init=6):
             ax.axis('off')
             ax.imshow(image[indexes[j]])
             if j == 0:
-                ax.set_title(f'{key}', fontsize=10)
-
+                ax.set_title(f'{key.upper().replace("_", " ")}', fontsize=10)
+    
     if stuff["label"][progressive] == 'recurrence':
         plt.savefig(os.path.join(os.path.dirname(__file__), 'img_lesions', 'recurrence', f'figure_{progressive}.png'))
     else:
         plt.savefig(os.path.join(os.path.dirname(__file__), 'img_lesions', 'stable', f'figure_{progressive}.png'))
         
     plt.close()
-
-def display(plt, axes, images, cur_row, c):
-    for i in range(c):
-        axes[cur_row, i].imshow(images[i])
-        axes[cur_row, i].set_axis_off()
 
 def wdt_fusion(mr, rtd):
     wavelet = 'db1'
@@ -57,24 +53,23 @@ def wdt_fusion(mr, rtd):
     fused_details_e = {}
     for key in coeffs_mr.keys():
         if key == 'aaa':  # Skip approximation coefficients for energy fusion
-            fused_details_e[key] = (coeffs_mr[key]*0.45 + coeffs_rtd[key]*0.55)
+            fused_details_e[key] = coeffs_rtd[key]*.45 + coeffs_mr[key]*.55
         else:
             energy1 = np.abs(coeffs_mr[key]) ** 2
             energy2 = np.abs(coeffs_rtd[key]) ** 2
             fused_details_e[key] = np.where(energy1 > energy2, coeffs_mr[key], coeffs_rtd[key])
 
     fused_image_e = pywt.idwtn(fused_details_e, wavelet, axes=(0, 1, 2), mode='smooth')
-    fused_image_e = fused_image_e # * ( mr > 0 )
+    fused_image_e = fused_image_e
     return fused_image_e
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--raw', action='store_true')
     args = parser.parse_args()
-    if args.raw:
-        path_to_data_folder = os.path.join(os.path.dirname(__file__), '..','..','data', 'raw') 
-    else:
-        path_to_data_folder = os.path.join(os.path.dirname(__file__), '..','..','data', 'processed') 
+    
+    path_to_data_folder = os.path.join(os.path.dirname(__file__), '..','..','data', 'processed') 
+    path_to_data = os.path.join(path_to_data_folder, 'global_data.pkl')
 
     clear_directory_content(os.path.join(os.path.dirname(__file__), 'img_lesions'))
     
@@ -82,42 +77,41 @@ if __name__ == '__main__':
     os.makedirs(os.path.join(os.path.dirname(__file__), 'img_lesions', 'stable'), exist_ok=True)
     os.makedirs(os.path.join(os.path.dirname(__file__), 'img_lesions', 'recurrence'), exist_ok=True)
     
-    file_names = [f for f in os.listdir(path_to_data_folder) if f.endswith('.pkl')]
     images, labels =  [], []
     
     stats = {
         "rtd": {"min": 0, "max": 0 },
         "mr": {"min": 0, "max": 0 },
+        "wdt_fusion": {"min": 0, "max": 0 }
     }
+
+    with open(path_to_data, 'rb') as input_file:
+        data = pickle.load(input_file)    
+        
+    data['wdt_fusion'] = []
+                
+    for i in range(len(data['mr'])):
+        if np.max(data['rtd'][i])>stats['rtd']['max']:
+            stats['rtd']['max'] = np.max(data['rtd'][i])
+        if np.min(data['rtd'][i])<stats['rtd']['min']:
+            stats['rtd']['min'] = np.min(data['rtd'][i])
+        if np.max(data['mr'][i])>stats['mr']['max']:
+            stats['mr']['max'] = np.max(data['mr'][i])
+        if np.min(data['mr'][i])<stats['mr']['min']:
+            stats['mr']['min'] = np.min(data['mr'][i])
     
-    # for file_split in file_names:
-    #     if file_split.endswith('.pkl'):    
-    #         with open(os.path.join(path_to_data_folder, file_split), 'rb') as input_file:
-    #             data = pickle.load(input_file)    
-    #         for i in range(len(data['mr'])):
-    #             images.append([np.array(data['mr'][i]), np.array(data['rtd'][i])])
-    #             if np.max(data['rtd'][i])>stats['rtd']['max']:
-    #                 stats['rtd']['max'] = np.max(data['rtd'][i])
-    #             if np.min(data['rtd'][i])<stats['rtd']['min']:
-    #                 stats['rtd']['min'] = np.min(data['rtd'][i])
-    #             if np.max(data['mr'][i])>stats['mr']['max']:
-    #                 stats['mr']['max'] = np.max(data['mr'][i])
-    #             if np.min(data['mr'][i])<stats['mr']['min']:
-    #                 stats['mr']['min'] = np.min(data['mr'][i])  
-    #         labels.extend(data['label'])
+    for i in range(len(data['mr'])):
+        scaled_mr = (data['mr'][i] - stats['mr']['min']) / (stats['mr']['max'] - stats['mr']['min'])
+        scaled_rtd = (data['rtd'][i] - stats['rtd']['min']) / (stats['rtd']['max'] - stats['rtd']['min'])
+        data['wdt_fusion'].append(wdt_fusion(scaled_mr, scaled_rtd))
+        if np.max(data['wdt_fusion'][i])>stats['wdt_fusion']['max']:
+            stats['wdt_fusion']['max'] = np.max(data['wdt_fusion'][i])
+        if np.min(data['wdt_fusion'][i])<stats['wdt_fusion']['min']:
+            stats['wdt_fusion']['min'] = np.min(data['wdt_fusion'][i])
+            
+    pprint.pprint(stats['wdt_fusion'])
     
-    for file_split in file_names:
-        if file_split.endswith('.pkl'):    
-            with open(os.path.join(path_to_data_folder, file_split), 'rb') as input_file:
-                data = pickle.load(input_file)    
-    
-    # for i in range(len(images)):
-        # images[i][0] = (images[i][0] - stats['mr']['min']) / (stats['mr']['max'] - stats['mr']['min'])
-        # images[i][1] = (images[i][1] - stats['rtd']['min']) / (stats['rtd']['max'] - stats['rtd']['min'])
-        # images[i].append(wdt_fusion(images[i][0], images[i][1]))
-        # images[i].append(data['mask'][i])
-    
-    keys = ['mr', 'rtd']
+    keys = ['mr', 'rtd', 'wdt_fusion']
     
     tot_samples = len(data['mr'])
     
