@@ -28,10 +28,10 @@ class ClassifierDatasetSplit(Dataset):
                     max_displacement=5.0,
                     locked_borders=2,
                     image_interpolation='linear'
-                )
+                ),
             ])
             self.transform_small = tio.Compose([
-                tio.RandomFlip(axes=(0, 1, 2), flip_probability=0.5)
+                tio.RandomFlip(axes=(0, 1, 2), flip_probability=0.5),
             ])
 
     def __len__(self):
@@ -45,25 +45,24 @@ class ClassifierDatasetSplit(Dataset):
             mr_rtd_fusion = self.data['mr_rtd_fusion'][idx]
             
             if self.split_name == 'train':
-                volume = torch.sum(mr > 0)
-                transformed_subject = self.transform_big(subject) if volume > 20**3 else self.transform_small(subject)
+                mr_rtd_fusion = self.transform_small(mr_rtd_fusion.unsqueeze(0))
                 
-            return mr_rtd_fusion, clinical_data, label
+            return mr_rtd_fusion.squeeze(0), clinical_data, label
         else:
             mr = self.data['mr'][idx]
             rtd = self.data['rtd'][idx]
             
             if self.split_name == 'train':
                 subject = tio.Subject(
-                    mr=tio.ScalarImage(tensor=mr), 
-                    rtd=tio.ScalarImage(tensor=rtd)
+                    mr=tio.ScalarImage(tensor=mr.unsqueeze(0)), 
+                    rtd=tio.ScalarImage(tensor=rtd.unsqueeze(0))
                 )
                 
                 volume = torch.sum(mr > 0)
                 transformed_subject = self.transform_big(subject) if volume > 20**3 else self.transform_small(subject)
 
-                mr = transformed_subject['mr'].data
-                rtd = transformed_subject['rtd'].data
+                mr = transformed_subject['mr'].data.squeeze(0)
+                rtd = transformed_subject['rtd'].data.squeeze(0)
                 
             return mr, rtd, clinical_data, label
 
@@ -370,8 +369,8 @@ class ClassifierDataset(Dataset):
         
     def create_split_keep_test(self, train_idx, val_idx):
         
-        train_set = self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], train_idx)
-        val_set = self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], val_idx)
+        train_set = deepcopy(self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], train_idx))
+        val_set = deepcopy(self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], val_idx))
         test_set = deepcopy(self.test_set_tmp)
         
         statistics = self.__compute_statistics__(train_set)
@@ -396,13 +395,13 @@ class ClassifierDataset(Dataset):
         inner_cv = StratifiedGroupKFold(n_splits=6)
             
         train_outer = self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], train_idx)
-        test_set = self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], test_idx)
+        test_set = deepcopy(self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], test_idx))
 
         # Use the first split as the train/validation division
         inner_train_idx, val_idx = next(inner_cv.split(train_outer['mr'], train_outer['label'], train_outer['subject_id']))
         
-        val_set = self.return_data_dictionary(train_outer['mr'], train_outer['rtd'], train_outer['clinical_data'], train_outer['label'], train_outer['subject_id'], val_idx,tensor_conversion=False)
-        train_set = self.return_data_dictionary(train_outer['mr'], train_outer['rtd'], train_outer['clinical_data'], train_outer['label'], train_outer['subject_id'], inner_train_idx, tensor_conversion=False)
+        val_set = deepcopy(self.return_data_dictionary(train_outer['mr'], train_outer['rtd'], train_outer['clinical_data'], train_outer['label'], train_outer['subject_id'], val_idx,tensor_conversion=False))
+        train_set = deepcopy(self.return_data_dictionary(train_outer['mr'], train_outer['rtd'], train_outer['clinical_data'], train_outer['label'], train_outer['subject_id'], inner_train_idx, tensor_conversion=False))
         
         statistics = self.__compute_statistics__(train_set)
         

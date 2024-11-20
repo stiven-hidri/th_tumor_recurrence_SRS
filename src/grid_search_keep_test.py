@@ -1,4 +1,5 @@
 from itertools import product
+import pprint
 import re
 import shutil
 from lightning.pytorch import Trainer
@@ -113,32 +114,29 @@ def calculate_statistics(predicted_labels, true_labels, predictions=None, ensemb
     
     if predictions is None:
         statistics = {
-            f"{prefix}_accuracy": round(((TP + TN) / (TP + TN + FP + FN)), 3) if (TP + TN + FP + FN) > 0 else 0,
-            f"{prefix}_recall": round(recall, 3),
-            f"{prefix}_specificity": round((TN / (TN + FP)), 3) if (TN + FP) > 0 else 0,
-            f"{prefix}_precision": round(precision, 3),
-            f"{prefix}_f1_score": round((2 * (precision * recall) / (precision + recall)), 3) if (precision + recall) > 0 else 0
+            f"{prefix}accuracy": round(((TP + TN) / (TP + TN + FP + FN)), 3) if (TP + TN + FP + FN) > 0 else 0,
+            f"{prefix}recall": round(recall, 3),
+            f"{prefix}specificity": round((TN / (TN + FP)), 3) if (TN + FP) > 0 else 0,
+            f"{prefix}precision": round(precision, 3),
+            f"{prefix}f1_score": round((2 * (precision * recall) / (precision + recall)), 3) if (precision + recall) > 0 else 0
         }
     else:    
         precision_curve, recall_curve, _ = precision_recall_curve(true_labels, predictions)
         roc_auc = roc_auc_score(true_labels, predictions)
         
         statistics = {
-            f"{prefix}_accuracy": round(((TP + TN) / (TP + TN + FP + FN)), 3) if (TP + TN + FP + FN) > 0 else 0,
-            f"{prefix}_recall": round(recall, 3),
-            f"{prefix}_specificity": round((TN / (TN + FP)), 3) if (TN + FP) > 0 else 0,
-            f"{prefix}_precision": round(precision, 3),
-            f"{prefix}_f1_score": round((2 * (precision * recall) / (precision + recall)), 3) if (precision + recall) > 0 else 0,
-            f"{prefix}_pr_auc": round(auc(recall_curve, precision_curve), 3),
-            f"{prefix}_roc_auc": round(roc_auc, 3)
+            f"{prefix}accuracy": round(((TP + TN) / (TP + TN + FP + FN)), 3) if (TP + TN + FP + FN) > 0 else 0,
+            f"{prefix}recall": round(recall, 3),
+            f"{prefix}specificity": round((TN / (TN + FP)), 3) if (TN + FP) > 0 else 0,
+            f"{prefix}precision": round(precision, 3),
+            f"{prefix}f1_score": round((2 * (precision * recall) / (precision + recall)), 3) if (precision + recall) > 0 else 0,
+            f"{prefix}pr_auc": round(auc(recall_curve, precision_curve), 3),
+            f"{prefix}roc_auc": round(roc_auc, 3)
         }
     
     return statistics
     
 def calculate_mean_statistics(statistics):
-    mean_statistics = {}
-    n = float(len(statistics))
-    
     concatenated_statistics = {key: [s[key] for s in statistics] for key in statistics[0].keys()}
 
     comprehansion = {}
@@ -151,11 +149,9 @@ def calculate_mean_statistics(statistics):
         minimum = round(np.min(elements), 3)
         maximum = round(np.max(elements), 3)
             
-        comprehansion[f"comprehension_{key}"] = f"{mean} ({minimum}, {maximum}) | std={std}"
-    
-    
+        comprehansion[f"comp_{key}"] = f"{mean} ({minimum}, {maximum}) | std={std}"
         
-    return mean_statistics
+    return comprehansion
 
 def calculate_mean_statistics_test(statistics):
     mean_statistics = {}
@@ -219,8 +215,8 @@ if __name__ == '__main__':
         torch.manual_seed(42)
         
         # Initialize list to collect test predictions for majority voting
-        test_predictions = defaultdict([]) #for each fold save probabilities
-        performance_per_fold = defaultdict([])
+        test_predictions = defaultdict(list) #for each fold save probabilities
+        performance_per_fold = defaultdict(list)
         thresholds = []
         true_labels = []
         
@@ -233,6 +229,26 @@ if __name__ == '__main__':
         for fold, (train_idx, val_idx) in enumerate(skf.split(classifier_dataset.global_data['mr'], classifier_dataset.global_data['label'], classifier_dataset.global_data['subject_id'])):
             
             train_set, val_set, test_set = classifier_dataset.create_split_keep_test(train_idx, val_idx)  
+            
+            statisticss = {
+                "train":[0, 0], 
+                "val":  [0, 0],
+                "test": [0, 0]
+                }
+            
+            for key in statisticss.keys():
+                
+                if key == "train":
+                    dataset = train_set.data
+                elif key == "val":
+                    dataset = val_set.data
+                elif key == "test":
+                    dataset = test_set.data
+                
+                for j in range(len(dataset['label'])):
+                    statisticss[key][int(dataset['label'][j])]+=1
+            
+            pprint.pprint(f"fold: {fold}\t{statisticss}")
             
             if len(true_labels) == 0:
                 true_labels = [int(l) for l in test_set.data['label']]
@@ -256,7 +272,7 @@ if __name__ == '__main__':
             # Checkpoint callback
             checkpoint_cb = ModelCheckpoint(monitor=config.checkpoint.monitor, dirpath=os.path.join(config.logger.log_dir, config.logger.experiment_name, f'version_{version}_fold_{fold}'), filename='{epoch:03d}_{' + config.checkpoint.monitor + ':.6f}', save_weights_only=True, save_top_k=config.checkpoint.save_top_k, mode=config.checkpoint.mode)
             
-            early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0., patience=3, verbose=True, mode="min")
+            early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0., patience=5, verbose=True, mode="min")
 
             # Trainer
             trainer = Trainer(logger=logger, accelerator=device, devices=[0] if device == "gpu" else "auto", default_root_dir=config.logger.log_dir, max_epochs=config.model.epochs, check_val_every_n_epoch=1, callbacks=[checkpoint_cb, early_stop_callback], log_every_n_steps=1, num_sanity_val_steps=0,reload_dataloaders_every_n_epochs=1)
@@ -265,7 +281,7 @@ if __name__ == '__main__':
             if not config.model.only_test:
                 trainer.fit(model=module, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
                 t = (module.validation_best_threshold + module.training_best_threshold)/ 2
-                thresholds = thresholds.append(t) #save threshold
+                thresholds.append(t) #save threshold
 
             # Collect test predictions per fold if test set is available
             module = load_checkpoint(config, checkpoint_cb, fold, version)
@@ -278,7 +294,7 @@ if __name__ == '__main__':
             
             current_predicted_labels = [1 if p >= t else 0 for p in current_predictions]
             
-            current_performance = calculate_statistics(current_predicted_labels, true_labels, current_predictions)
+            current_performance = calculate_statistics(current_predicted_labels, true_labels, current_predictions, ensemble=False)
             
             performance_per_fold[fold] = current_performance
 
@@ -287,7 +303,8 @@ if __name__ == '__main__':
         #majority vote
         
         predicted_labels_for_each_split =  np.array([ [ 1 if p >= final_threshold else 0 for p in v] for k, v in test_predictions.items()])
-        final_predicted_labels_majorityvote = mode(predicted_labels_for_each_split, axis=0).mode[0]
+        majority_mode = mode(predicted_labels_for_each_split, axis=0)
+        final_predicted_labels_majorityvote = majority_mode.mode.flatten()
         
         averaged_predictions = np.mean(np.array(list(test_predictions.values())), axis=0)
         final_predicted_labels_avgpredictions = [1 if p >= final_threshold else 0 for p in averaged_predictions]

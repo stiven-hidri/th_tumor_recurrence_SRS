@@ -101,7 +101,7 @@ class Bottleneck(nn.Module):
         return out
 
 class ResNet34_3d(nn.Module):
-    def __init__(self, shortcut_type='B', no_cuda = False, pretrained = True):
+    def __init__(self, shortcut_type='B', no_cuda = False, pretrained = False):
         
         self.block = BasicBlock
         self.layers = [3, 4, 6, 3]

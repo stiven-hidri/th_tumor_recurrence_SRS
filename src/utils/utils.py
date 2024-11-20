@@ -3,6 +3,7 @@ import pickle
 import pprint
 from fuzzywuzzy import fuzz, process
 import os
+import torch.nn as nn
 import shutil
 import re
 
@@ -256,3 +257,13 @@ def print_statistics_globally():
     print(f'\nsum of subjects_counter\n{sum([x[0] + x[1] for x in subjects_counter.values()])}')
     
     print(f'\nsum_recurrence: {sum_recurrence}\nsum_stable:{sum_stable}')
+    
+def weight_init(component):
+    for m in component.modules():
+        if isinstance(m, (nn.Linear, nn.Conv2d, nn.Conv3d)):
+            nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
+            nn.init.constant_(m.weight, 1)
+            nn.init.constant_(m.bias, 0)

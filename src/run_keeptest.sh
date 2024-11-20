@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=2
 
 python3 grid_search_whole_dataset.py --config configs/mlp_cd.yaml --experiment_name final_keeptest_mlpcd_minmax --k 10
 python3 grid_search_keep_test.py --config configs/base_model.yaml --experiment_name final_keeptest_basemodel_minmax --k 10

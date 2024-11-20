@@ -6,7 +6,6 @@ import torch
 import numpy as np
 from lightning.pytorch import LightningModule
 from models.base_model import BaseModel
-from models.conv_rnn import ConvRNN
 from models.wdt_conv import WDTConv
 from models.conv_lstm import ConvLSTM
 from models.trans_med import TransMedModel
@@ -23,8 +22,6 @@ class ClassificationModule(LightningModule):
         
         print(f'Using {name} lr: {lr} weight_decay: {weight_decay} lf: {lf} dropout: {dropout} alpha_fl: {alpha_fl} gamma_fl: {gamma_fl} p_augmentation: {p_augmentation} ' )
         
-        # Config    
-        # Network
         if name == 'base_model_enhancedV2':
             self.model = BaseModel_EnhancedV2(dropout=dropout, use_clinical_data=use_clinical_data)
         elif name == 'trans_med':
@@ -33,10 +30,8 @@ class ClassificationModule(LightningModule):
             self.model = WDTConv(dropout=dropout, use_clinical_data=use_clinical_data)
         elif name == 'base_model':
             self.model = BaseModel(dropout=dropout, use_clinical_data=use_clinical_data)
-        elif name == 'conv_rnn':
-            self.model = ConvRNN(dropout=dropout, rnn_type=rnn_type, hidden_size=hidden_size, num_layers=num_layers, use_clinical_data=use_clinical_data)
         elif name == 'conv_lstm':
-            self.model = ConvLSTM(dropout=dropout, hidden_size=hidden_size, num_layers=num_layers, use_clinical_data=use_clinical_data, rnn_type=rnn_type)
+            self.model = ConvLSTM(dropout=dropout, hidden_size=hidden_size, num_layers=num_layers, use_clinical_data=use_clinical_data)
         elif name == 'mlp_cd':
             self.model = MlpCD(dropout=dropout, pretrained=False)
         else:
@@ -189,7 +184,7 @@ class ClassificationModule(LightningModule):
         
         names, thresholds_techinques, statistics = ['j', 'f1'], [best_t_j, best_t_f1], [self.calculate_statistics(pred_probs, true_labels, best_t_j), self.calculate_statistics(pred_probs, true_labels, best_t_f1)]
         
-        final_i = int(np.argmax([x['f1_score'] for x in statistics]))
+        final_i = int(np.argmax(np.nan_to_num([x['f1_score'] for x in statistics], nan=-np.inf)))
         return names[final_i], thresholds_techinques[final_i], statistics[final_i]
 
     def on_validation_epoch_start(self):
@@ -232,13 +227,13 @@ class ClassificationModule(LightningModule):
         self.validation_best_threshold = threshold
         self.best_validation_statistics = statistics
         
-        self.log('threshold_val', threshold, logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('f1_val', statistics['f1_score'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('precision_val', statistics['precision'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('recall_val', statistics['recall'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('specificity_val', statistics['specificity'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('accuracy_val', statistics['accuracy'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('pr_auc_val', statistics['pr_auc'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('threshold_val', threshold, logger=False, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('f1_val', statistics['f1_score'], logger=False, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('precision_val', statistics['precision'], logger=False, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('recall_val', statistics['recall'], logger=False, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('specificity_val', statistics['specificity'], logger=False, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('accuracy_val', statistics['accuracy'], logger=False, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('pr_auc_val', statistics['pr_auc'], logger=False, prog_bar=True, on_step=False, on_epoch=True)
         
     def test_step(self, batch, batch_idx):
         if self.name == 'wdt_conv':
@@ -259,13 +254,13 @@ class ClassificationModule(LightningModule):
         # Aggregate and log metrics across all batches
         performance = self.calculate_statistics(self.test_stuff['predictions'], self.test_stuff['labels'], self.validation_best_threshold)
         
-        self.log('test_f1', performance['f1_score'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('test_precision', performance['precision'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('test_recall', performance['recall'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('test_specificity', performance['specificity'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('test_accuracy', performance['accuracy'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('test_pr_auc', performance['pr_auc'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('test_roc_auc', performance['roc_auc'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('test_f1', performance['f1_score'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
+        self.log('test_precision', performance['precision'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
+        self.log('test_recall', performance['recall'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
+        self.log('test_specificity', performance['specificity'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
+        self.log('test_accuracy', performance['accuracy'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
+        self.log('test_pr_auc', performance['pr_auc'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
+        self.log('test_roc_auc', performance['roc_auc'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
     
     def predict_step(self, batch, batch_idx):
         if self.name == 'wdt_conv':
@@ -315,7 +310,7 @@ class ClassificationModule(LightningModule):
         
         elif self.scheduler == 'plateau':
             print("Using ReduceLROnPlateau scheduler")
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizers, mode='min', factor=0.1, patience=1, min_lr=1e-12)
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizers, mode='min', factor=0.1, patience=3, min_lr=1e-12)
             return  {
                         'optimizer': optimizers,
                         'lr_scheduler': scheduler,

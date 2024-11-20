@@ -3,17 +3,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from models.mlp_cd import MlpCD
 import os
-import torch.nn.init as init
 
 class BaseModel_EnhancedV2(nn.Module):
-    def __init__(self, dropout=.3, out_dim_clincal_features=64, use_clinical_data=True, out_dim_cnn=256, hidden_size_fc1=256, hidden_size_fc=256):
+    def __init__(self, dropout=.3, out_dim_clincal_features=64, use_clinical_data=True, out_dim_cnn=256, hidden_size_fc1=256):
         super(BaseModel_EnhancedV2, self).__init__()
         
         self.use_clinical_data = use_clinical_data
         self.out_dim_clincal_features = out_dim_clincal_features
-        
-        
-        print(f'use_clinical_data: {use_clinical_data}, dropout: {dropout}')
         
         # Lesion input branch
         self.les_conv1 = nn.Conv3d(1, 32, kernel_size=3, padding=1)
@@ -33,9 +29,9 @@ class BaseModel_EnhancedV2(nn.Module):
         self.les_bn4 = nn.BatchNorm3d(out_dim_cnn)
         
         self.les_global_pool = nn.AdaptiveAvgPool3d(1)
-        self.les_fc1 = nn.Linear(out_dim_cnn, 512)
+        self.les_fc1 = nn.Linear(out_dim_cnn, 1024)
         self.les_dropout = nn.Dropout(dropout)
-        self.les_fc2 = nn.Linear(512, out_dim_cnn)
+        self.les_fc2 = nn.Linear(1024, out_dim_cnn)
         
         # Dose input branch
         self.dose_conv1 = nn.Conv3d(1, 32, kernel_size=3, padding=1)
@@ -55,24 +51,23 @@ class BaseModel_EnhancedV2(nn.Module):
         self.dose_bn4 = nn.BatchNorm3d(out_dim_cnn)
         
         self.dose_global_pool = nn.AdaptiveAvgPool3d(1)
-        self.dose_fc1 = nn.Linear(out_dim_cnn, 512)
+        self.dose_fc1 = nn.Linear(out_dim_cnn, 1024)
         self.dose_dropout = nn.Dropout(dropout)
-        self.dose_fc2 = nn.Linear(512, out_dim_cnn)
+        self.dose_fc2 = nn.Linear(1024, out_dim_cnn)
             
         if self.use_clinical_data:
             self.cd_backbone = MlpCD(pretrained=False)
-            
             self.cd_backbone.final_fc = nn.Identity()
                 
         input_dim = out_dim_cnn*2 + out_dim_clincal_features if self.use_clinical_data else out_dim_cnn*2
         
-        # self.fc1 = nn.Sequential(
-        #     nn.Linear(input_dim, hidden_size_fc1),
-        #     nn.ReLU(),
-        #     nn.Dropout(dropout)  # Regularization
-        # )     
+        self.fc1 = nn.Sequential(
+            nn.Linear(input_dim, hidden_size_fc1),
+            nn.ReLU(),
+            nn.Dropout(dropout)  # Regularization
+        )     
         
-        self.final_fc = nn.Linear(input_dim, 1)
+        self.final_fc = nn.Linear(hidden_size_fc1, 1)
         
     def forward(self, les_input, dose_input, clinical_input=None):
         
@@ -106,9 +101,7 @@ class BaseModel_EnhancedV2(nn.Module):
         
         # Clinical branch
         if self.use_clinical_data:
-            
             clinical_output = self.cd_backbone(clinical_input)
-
             if clinical_output.dim() == 1:
                 clinical_output = clinical_output.unsqueeze(0)
 
@@ -117,8 +110,7 @@ class BaseModel_EnhancedV2(nn.Module):
         else:
             combined = torch.cat((les_output, dose_output), dim=1)
         
-        # out = self.fc1(combined)
+        out_fc1 = self.fc1(combined)
+        out_final = self.final_fc(out_fc1)
         
-        out = self.final_fc(combined)
-        
-        return out
+        return out_final

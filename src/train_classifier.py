@@ -92,7 +92,7 @@ if __name__ == '__main__':
         mode=config.checkpoint.mode,
     )
 
-    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0, patience=3, verbose=True, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0, patience=20, verbose=True, mode="min")
 
     # Instantiate a trainer
     trainer = Trainer(

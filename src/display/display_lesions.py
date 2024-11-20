@@ -1,5 +1,6 @@
 import argparse
 import pprint
+import random
 import shutil
 import matplotlib.pyplot    as plt
 import numpy                as np
@@ -103,7 +104,9 @@ if __name__ == '__main__':
     for i in range(len(data['mr'])):
         scaled_mr = (data['mr'][i] - stats['mr']['min']) / (stats['mr']['max'] - stats['mr']['min'])
         scaled_rtd = (data['rtd'][i] - stats['rtd']['min']) / (stats['rtd']['max'] - stats['rtd']['min'])
-        data['wdt_fusion'].append(wdt_fusion(scaled_mr, scaled_rtd))
+        wdtf = wdt_fusion(scaled_mr, scaled_rtd)
+        wdtf = (wdtf - wdtf.min()) / (wdtf.max() - wdtf.min())
+        data['wdt_fusion'].append(wdtf)
         if np.max(data['wdt_fusion'][i])>stats['wdt_fusion']['max']:
             stats['wdt_fusion']['max'] = np.max(data['wdt_fusion'][i])
         if np.min(data['wdt_fusion'][i])<stats['wdt_fusion']['min']:
@@ -113,8 +116,8 @@ if __name__ == '__main__':
     
     keys = ['mr', 'rtd', 'wdt_fusion']
     
-    tot_samples = len(data['mr'])
+    sample_indexes = list(random.sample(range(len(data['mr'])), k=10))
     
-    for i in range(tot_samples):
-        print(f'\r{i+1}/{tot_samples}', end='')
+    for i in sample_indexes:
+        print(f'\r{i+1}/{len(sample_indexes)}', end='')
         plot(data, keys, i)
