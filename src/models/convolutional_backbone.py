@@ -3,48 +3,56 @@ import torch.nn.functional as F
 import torch
 from utils import weight_init
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 class ConvBackbone3D(nn.Module):
-    def __init__(self, out_dim_backbone=512, dropout=0.1):
+    def __init__(self, out_dim_backbone=256, dropout=0.1):
         super(ConvBackbone3D, self).__init__()
-            # Define convolutional layers
-            
-        self.les_conv1 = nn.Conv3d(1, 32, kernel_size=3, padding=1)
-        self.les_pool1 = nn.MaxPool3d(2)
-        self.les_bn1 = nn.BatchNorm3d(32)
+        # Define convolutional layers
         
-        self.les_conv2 = nn.Conv3d(32, 64, kernel_size=3, padding=1)
-        self.les_pool2 = nn.MaxPool3d(2)
-        self.les_bn2 = nn.BatchNorm3d(64)
+        self.wdt_conv1 = nn.Conv3d(1, 32, kernel_size=3, padding=1)
+        self.wdt_pool1 = nn.MaxPool3d(2)
+        self.wdt_bn1 = nn.BatchNorm3d(32)
         
-        self.les_conv3 = nn.Conv3d(64, 128, kernel_size=3, padding=1)
-        self.les_pool3 = nn.MaxPool3d(2)
-        self.les_bn3 = nn.BatchNorm3d(128)
+        self.wdt_conv2 = nn.Conv3d(32, 64, kernel_size=3, padding=1)
+        self.wdt_pool2 = nn.MaxPool3d(2)
+        self.wdt_bn2 = nn.BatchNorm3d(64)
         
-        self.les_global_pool = nn.AdaptiveAvgPool3d(1)
-        self.les_fc1 = nn.Linear(128, 512)
-        self.les_dropout = nn.Dropout(dropout)
-        self.les_fc2 = nn.Linear(512, out_dim_backbone)
+        self.wdt_conv3 = nn.Conv3d(64, 128, kernel_size=3, padding=1)
+        self.wdt_pool3 = nn.MaxPool3d(2)
+        self.wdt_bn3 = nn.BatchNorm3d(128)
+        
+        # Additional convolutional level
+        self.wdt_conv4 = nn.Conv3d(128, 256, kernel_size=3, padding=1)
+        self.wdt_pool4 = nn.MaxPool3d(2)
+        self.wdt_bn4 = nn.BatchNorm3d(256)
+        
+        self.wdt_global_pool = nn.AdaptiveAvgPool3d(1)
+        self.wdt_fc1 = nn.Linear(256, 512)
+        self.wdt_dropout = nn.Dropout(dropout)
+        self.wdt_fc2 = nn.Linear(512, out_dim_backbone)
         
         weight_init(self)
     
     def forward(self, x):
-        x = self.les_bn1(self.les_pool1(F.relu(self.les_conv1(x))))        
-        x = self.les_bn2(self.les_pool2(F.relu(self.les_conv2(x))))
-        x = self.les_bn3(self.les_pool3(F.relu(self.les_conv3(x))))
+        x = self.wdt_bn1(self.wdt_pool1(F.relu(self.wdt_conv1(x))))
+        x = self.wdt_bn2(self.wdt_pool2(F.relu(self.wdt_conv2(x))))
+        x = self.wdt_bn3(self.wdt_pool3(F.relu(self.wdt_conv3(x))))
+        x = self.wdt_bn4(self.wdt_pool4(F.relu(self.wdt_conv4(x))))  # Additional level
         
-        x = self.les_global_pool(x).view(x.size(0), -1)
+        x = self.wdt_global_pool(x).view(x.size(0), -1)
         
-        x = self.les_dropout(F.relu(self.les_fc1(x)))
-        wdt_output = F.relu(self.les_fc2(x))  
+        x = self.wdt_dropout(F.relu(self.wdt_fc1(x)))
+        wdt_output = F.relu(self.wdt_fc2(x))
         
         return wdt_output
+
         
 class ConvBackbone(nn.Module):
-    def __init__(self, in_channels=3,dropout=0.1, out_dim_backbone=256):
+    def __init__(self, in_channels=3, dropout=0.1, out_dim_backbone=256):
         super(ConvBackbone, self).__init__()
-        self.in_channels = in_channels
-        
-        # Define convolutional layers
         self.conv_layers = nn.Sequential(
             nn.Conv2d(in_channels, 32, kernel_size=3, stride=1, padding=1),  # Output: 32 x 40 x 40
             nn.BatchNorm2d(32),
@@ -59,30 +67,17 @@ class ConvBackbone(nn.Module):
             nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),  # Output: 128 x 10 x 10
             nn.BatchNorm2d(128),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2),  # Output: 128 x 10 x 10
-            
-            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),  # Output: 128 x 10 x 10
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2),  # Output: 128 x 10 x 10
-            
+            nn.AdaptiveAvgPool2d((1, 1))  # Output: 128 x 1 x 1
         )
         
-        self.les_global_pool = nn.AdaptiveAvgPool2d(1)
-        self.les_fc1 = nn.Linear(256, 512)
-        self.les_dropout = nn.Dropout(dropout)
-        if out_dim_backbone != 512:
-            self.les_fc2 = nn.Linear(512, out_dim_backbone)
-        else:
-            self.les_fc2 = nn.Identity()
-        
+        self.fc = nn.Linear(128, out_dim_backbone)
         
         weight_init(self)
     
     def forward(self, x):
-        x = self.conv_layers(x)  # Shape: (batch_size, 256, 1, 1)
-        x = torch.flatten(x, start_dim=1)  # Shape: (batch_size, 256)
-        x = self.fc(x)
+        x = self.conv_layers(x)  # Shape: (batch_size, 128, 1, 1)
+        x = torch.flatten(x, start_dim=1)  # Shape: (batch_size, 128)
+        x = self.fc(x)  # Shape: (batch_size, feature_dim)
         return x
     
 class MobileNet(nn.Module):
@@ -176,7 +171,7 @@ class InvertedResidual(nn.Module):
 
 
 class MobileNet3D(nn.Module):
-    def __init__(self, out_dim_backbone=512, sample_size=224, width_mult=1., dropout=.1):
+    def __init__(self, out_dim_backbone=256, sample_size=224, width_mult=2., dropout=.1):
         super(MobileNet3D, self).__init__()
         block = InvertedResidual
         input_channel = 1

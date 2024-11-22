@@ -289,7 +289,7 @@ class ClassifierDataset(Dataset):
                         
         return max_values
 
-    def __pad_resize_images__(self, global_data, desired_shape=(42, 42, 42)):        
+    def __pad_resize_images__(self, global_data, desired_shape=(66, 66, 66)):        
         keys = ['mr', 'rtd']
         for i in range(len(global_data['mr'])):
             for k in keys:

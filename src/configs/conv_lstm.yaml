@@ -2,7 +2,7 @@ dataset:
   name: name
 model:
   name: conv_lstm
-  epochs: 150
+  epochs: 100
   batch_size: 32
   optimizer: adam
   scheduler: plateau
@@ -10,13 +10,13 @@ model:
   hidden_size: 32
   num_layers: 2
   lr: 1e-5
-  weight_decay: 1e-3
-  dropout: .3
+  weight_decay: 1e-4
+  dropout: .1
   only_test: False
   use_clinical_data: True
   lf: fl          #wbce, bce, fl
-  alpha_fl: .1
-  gamma_fl: 3
+  alpha_fl: .2
+  gamma_fl: 2
   pos_weight: .9
   augmentation_techniques: ['random_affine', 'shear', 'random_rotate', 'random_flip']
   p_augmentation: .9

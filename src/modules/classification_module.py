@@ -172,9 +172,9 @@ class ClassificationModule(LightningModule):
         true_labels = [l.item() for l in labels]
                 
         #maximize_j
-        fpr, tpr, thresholds_j = roc_curve(true_labels, pred_probs)
-        youden_j = tpr - fpr
-        best_t_j = thresholds_j[np.argmax(youden_j)]
+        # fpr, tpr, thresholds_j = roc_curve(true_labels, pred_probs)
+        # youden_j = tpr - fpr
+        # best_t_j = thresholds_j[np.argmax(youden_j)]
         
         #maximize_f1
         precision, recall, thresholds_f1 = precision_recall_curve(true_labels, pred_probs)
@@ -182,9 +182,15 @@ class ClassificationModule(LightningModule):
         fscore = np.nan_to_num(fscore, nan=-np.inf)
         best_t_f1 = thresholds_f1[np.argmax(fscore)]
         
-        names, thresholds_techinques, statistics = ['j', 'f1'], [best_t_j, best_t_f1], [self.calculate_statistics(pred_probs, true_labels, best_t_j), self.calculate_statistics(pred_probs, true_labels, best_t_f1)]
+        # names, thresholds_techinques, statistics = ['j', 'f1'], [best_t_j, best_t_f1], [self.calculate_statistics(pred_probs, true_labels, best_t_j), self.calculate_statistics(pred_probs, true_labels, best_t_f1)]
         
-        final_i = int(np.argmax(np.nan_to_num([x['f1_score'] for x in statistics], nan=-np.inf)))
+        # final_i = int(np.argmax(np.nan_to_num([x['f1_score'] for x in statistics], nan=-np.inf)))
+        
+        # names, thresholds_techinques, statistics = ['j'], [best_t_j], [self.calculate_statistics(pred_probs, true_labels, best_t_j)]
+        names, thresholds_techinques, statistics = ['f1'], [best_t_f1], [self.calculate_statistics(pred_probs, true_labels, best_t_f1)]
+        
+        final_i = 0
+        
         return names[final_i], thresholds_techinques[final_i], statistics[final_i]
 
     def on_validation_epoch_start(self):
