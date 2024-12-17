@@ -20,7 +20,7 @@ class ClassificationModule(LightningModule):
         self.save_hyperparameters()
         self.name = name
         
-        print(f'Using {name} lr: {lr} weight_decay: {weight_decay} lf: {lf} dropout: {dropout} alpha_fl: {alpha_fl} gamma_fl: {gamma_fl} p_augmentation: {p_augmentation} ' )
+        print(f'Using {name} | lr: {lr} | weight_decay: {weight_decay} | lf: {lf} | dropout: {dropout} | pos_weight: | {pos_weight} | alpha_fl: {alpha_fl} | gamma_fl: {gamma_fl}' )
         
         if name == 'base_model_enhancedV2':
             self.model = BaseModel_EnhancedV2(dropout=dropout, use_clinical_data=use_clinical_data)
@@ -133,14 +133,14 @@ class ClassificationModule(LightningModule):
         self.training_best_threshold = threshold
         self.best_training_statistics = statistics
         
-        self.log('threshold_train', threshold, logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('threshold_train', threshold, logger=True, prog_bar=False, on_step=False, on_epoch=True)
         self.log('f1_train', statistics['f1_score'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('precision_train', statistics['precision'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('recall_train', statistics['recall'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('specificity_train', statistics['specificity'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('accuracy_train', statistics['accuracy'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('pr_auc_train', statistics['pr_auc'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('roc_auc_train', statistics['roc_auc'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('precision_train', statistics['precision'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
+        self.log('recall_train', statistics['recall'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
+        self.log('specificity_train', statistics['specificity'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
+        self.log('accuracy_train', statistics['accuracy'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
+        self.log('pr_auc_train', statistics['pr_auc'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
+        self.log('roc_auc_train', statistics['roc_auc'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
         
         self.log('lr', lr, prog_bar=True, on_epoch=True)   
 
@@ -233,13 +233,13 @@ class ClassificationModule(LightningModule):
         self.validation_best_threshold = threshold
         self.best_validation_statistics = statistics
         
-        self.log('threshold_val', threshold, logger=False, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('f1_val', statistics['f1_score'], logger=False, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('precision_val', statistics['precision'], logger=False, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('recall_val', statistics['recall'], logger=False, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('specificity_val', statistics['specificity'], logger=False, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('accuracy_val', statistics['accuracy'], logger=False, prog_bar=True, on_step=False, on_epoch=True)
-        self.log('pr_auc_val', statistics['pr_auc'], logger=False, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('threshold_val', threshold, logger=True, prog_bar=False, on_step=False, on_epoch=True)
+        self.log('f1_val', statistics['f1_score'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('precision_val', statistics['precision'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
+        self.log('recall_val', statistics['recall'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
+        self.log('specificity_val', statistics['specificity'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
+        self.log('accuracy_val', statistics['accuracy'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
+        self.log('pr_auc_val', statistics['pr_auc'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
         
     def test_step(self, batch, batch_idx):
         if self.name == 'wdt_conv':
@@ -260,7 +260,7 @@ class ClassificationModule(LightningModule):
         # Aggregate and log metrics across all batches
         performance = self.calculate_statistics(self.test_stuff['predictions'], self.test_stuff['labels'], self.validation_best_threshold)
         
-        self.log('test_f1', performance['f1_score'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
+        self.log('test_f1', performance['f1_score'], logger=True, prog_bar=True, on_step=False, on_epoch=True)
         self.log('test_precision', performance['precision'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
         self.log('test_recall', performance['recall'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
         self.log('test_specificity', performance['specificity'], logger=True, prog_bar=False, on_step=False, on_epoch=True)
@@ -304,7 +304,7 @@ class ClassificationModule(LightningModule):
         
         if self.scheduler == 'cosine':
             print("Using CosineAnnealingLR scheduler")
-            scheduler = [torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizers, T_0=10, T_mult=1, eta_min=self.lr*1e-1)]
+            scheduler = [torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizers, T_0=10, T_mult=2, eta_min=self.lr*1e-1)]
         
         elif self.scheduler == 'step':
             print("Using StepLR scheduler")
@@ -316,7 +316,7 @@ class ClassificationModule(LightningModule):
         
         elif self.scheduler == 'plateau':
             print("Using ReduceLROnPlateau scheduler")
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizers, mode='min', factor=0.1, patience=3, min_lr=1e-12)
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizers, mode='min', factor=0.5, patience=5, min_lr=1e-12)
             return  {
                         'optimizer': optimizers,
                         'lr_scheduler': scheduler,

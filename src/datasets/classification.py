@@ -1,6 +1,7 @@
 from copy import copy, deepcopy
 import os
 import pickle
+import random
 import pywt
 from torch.utils.data import Dataset
 from utils.augment import combine_aug
@@ -21,17 +22,8 @@ class ClassifierDatasetSplit(Dataset):
         self.model_name = model_name
         self.split_name = split_name
         if self.split_name == 'train':
-            self.transform_big = tio.Compose([
-                tio.RandomFlip(axes=(0, 1, 2), flip_probability=0.5),
-                tio.RandomElasticDeformation(
-                    num_control_points=7,
-                    max_displacement=5.0,
-                    locked_borders=2,
-                    image_interpolation='linear'
-                ),
-            ])
-            self.transform_small = tio.Compose([
-                tio.RandomFlip(axes=(0, 1, 2), flip_probability=0.5),
+            self.transform = tio.Compose([
+                tio.RandomFlip(axes=(0, 1, 2), flip_probability=0.5)
             ])
 
     def __len__(self):
@@ -41,25 +33,30 @@ class ClassifierDatasetSplit(Dataset):
         clinical_data = self.data['clinical_data'][idx]
         label = self.data['label'][idx]
         
+        k = random.randint(0, 3)
+        axes = random.choice([(0,1), (0,2), (1,2)])
+        
         if 'wdt' in self.model_name:
             mr_rtd_fusion = self.data['mr_rtd_fusion'][idx]
             
-            if self.split_name == 'train':
-                mr_rtd_fusion = self.transform_small(mr_rtd_fusion.unsqueeze(0))
+            if self.split_name == 'train' and self.model_name != 'mlp_cd':
+                mr_rtd_fusion = mr_rtd_fusion.rot90(k=k, dims=axes)
+                mr_rtd_fusion = self.transform(mr_rtd_fusion.unsqueeze(0))
                 
             return mr_rtd_fusion.squeeze(0), clinical_data, label
         else:
-            mr = self.data['mr'][idx]
-            rtd = self.data['rtd'][idx]
+            mr = self.data['mr'][idx].rot90(k=k, dims =axes)
+            rtd = self.data['rtd'][idx].rot90(k=k, dims =axes)
             
-            if self.split_name == 'train':
+            if self.split_name == 'train' and self.model_name != 'mlp_cd':
                 subject = tio.Subject(
                     mr=tio.ScalarImage(tensor=mr.unsqueeze(0)), 
                     rtd=tio.ScalarImage(tensor=rtd.unsqueeze(0))
                 )
                 
-                volume = torch.sum(mr > 0)
-                transformed_subject = self.transform_big(subject) if volume > 20**3 else self.transform_small(subject)
+                # volume = torch.sum(mr > 0)
+                # transformed_subject = self.transform_big(subject) if volume > 20**3 else self.transform_small(subject)
+                transformed_subject = self.transform(subject)
 
                 mr = transformed_subject['mr'].data.squeeze(0)
                 rtd = transformed_subject['rtd'].data.squeeze(0)
@@ -79,7 +76,7 @@ class ClassifierDataset(Dataset):
         
         self.CLINIC_FEATURES_TO_DISCRETIZE = [0, 1, 3, 4]
         self.CLINIC_FEATURES_TO_NORMALIZE = [2, 5, 6, 7]
-        # 0 = mets_diagnosis, 1 = primary_diagnosis, 2 = age, 3 = gender, 4 = roi, 5 = fractions, 6 = longest_diameter, 7 = number_of_lesions
+        # 0: mets_diagnosis, 1: primary_diagnosis, 2: age, 3: gender, 4: roi, 5: fractions, 6: longest_diameter, 7: number_of_lesions
         self.CLINIC_FEATURES_TO_KEEP = [0, 1, 2, 3, 4, 6, 7]
         
         self.ORIGINAL_TEST_SET = [ 427, 243, 257, 224, 420, 312, 316, 199, 219, 492, 332, 364, 132 ]
@@ -220,63 +217,6 @@ class ClassifierDataset(Dataset):
         
         return statistics 
 
-    def __average_statistics__(self, statistics_list):
-        averaged_statistics = {}
-
-        # Iterate over the statistics of the first entry to initialize the averaged_statistics
-        for key in statistics_list[0].keys():
-            if key not in averaged_statistics:
-                averaged_statistics[key] = {}
-                
-                if key == 'clinical_data':
-                    for j in statistics_list[0][key].keys():
-                        averaged_statistics[key][j] = {}
-                        averaged_statistics[key][j] = {
-                            'min': 0,
-                            'max': 0,
-                            'mean': 0,
-                            'std': 0
-                        }
-                else:
-                    averaged_statistics[key] = {
-                        'min': 0,
-                        'max': 0,
-                        'mean': 0,
-                        'std': 0
-                    }
-        
-        # Sum up the statistics across all entries in the statistics_list
-        for stats in statistics_list:
-            for key in stats.keys():
-                if key == 'clinical_data':
-                    for j in stats[key].keys():
-                        averaged_statistics[key][j]['min'] += stats[key][j]['min']
-                        averaged_statistics[key][j]['max'] += stats[key][j]['max']
-                        averaged_statistics[key][j]['mean'] += stats[key][j]['mean']
-                        averaged_statistics[key][j]['std'] += stats[key][j]['std']
-                else:
-                    averaged_statistics[key]['min'] += stats[key]['min']
-                    averaged_statistics[key]['max'] += stats[key]['max']
-                    averaged_statistics[key]['mean'] += stats[key]['mean']
-                    averaged_statistics[key]['std'] += stats[key]['std']
-        
-        num_statistics = len(statistics_list)
-        
-        for key in averaged_statistics.keys():
-            if key == 'clinical_data':
-                for j in averaged_statistics[key].keys():    
-                    averaged_statistics[key][j]['min'] /= num_statistics
-                    averaged_statistics[key][j]['max'] /= num_statistics
-                    averaged_statistics[key][j]['mean'] /= num_statistics
-                    averaged_statistics[key][j]['std'] /= num_statistics
-            else:
-                averaged_statistics[key]['min'] /= num_statistics
-                averaged_statistics[key]['max'] /= num_statistics
-                averaged_statistics[key]['mean'] /= num_statistics
-                averaged_statistics[key]['std'] /= num_statistics
-
-        return averaged_statistics
-
     def __get_max_values__(self, clinical_data):
         max_values = {}
         for tensor in clinical_data:
@@ -392,7 +332,7 @@ class ClassifierDataset(Dataset):
         return ClassifierDatasetSplit(model_name=self.model_name, data=train_set, split_name="train"), ClassifierDatasetSplit(model_name=self.model_name, data=val_set, split_name="val"), ClassifierDatasetSplit(model_name=self.model_name, data=test_set, split_name="test")
     
     def create_split_whole_dataset(self, train_idx, test_idx) -> list[list[ClassifierDatasetSplit]]:    
-        inner_cv = StratifiedGroupKFold(n_splits=6)
+        inner_cv = StratifiedGroupKFold(n_splits=5)
             
         train_outer = self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], train_idx)
         test_set = deepcopy(self.return_data_dictionary(self.global_data['mr'], self.global_data['rtd'], self.global_data['clinical_data'], self.global_data['label'], self.global_data['subject_id'], test_idx))

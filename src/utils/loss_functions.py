@@ -39,8 +39,7 @@ class WeightedBCELoss(nn.Module):
 
     def forward(self, logits, targets):
         probs = torch.sigmoid(logits)
-        loss = - (self.pos_weight * targets * torch.log(probs) +
-                  self.neg_weight * (1 - targets) * torch.log(1 - probs))
+        loss = - (self.pos_weight * targets * torch.log(probs) + self.neg_weight * (1 - targets) * torch.log(1 - probs))
         
         if self.reduction == 'mean':
             return loss.mean()

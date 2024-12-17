@@ -264,9 +264,9 @@ if __name__ == '__main__':
             train_set.p_augmentation = p_augmentation
             train_set.augmentation_techniques = []
             
-            train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=4, persistent_workers=True)
-            val_dataloader = DataLoader(val_set, batch_size=batch_size, num_workers=4, persistent_workers=True)
-            test_dataloader = DataLoader(test_set, batch_size=batch_size, num_workers=4, persistent_workers=True) 
+            train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=8, persistent_workers=True)
+            val_dataloader = DataLoader(val_set, batch_size=batch_size, num_workers=8, persistent_workers=True)
+            test_dataloader = DataLoader(test_set, batch_size=batch_size, num_workers=8, persistent_workers=True) 
             
             # Logger for each experiment
             logger = TensorBoardLogger(save_dir=config.logger.log_dir, version=f"version_{version}_fold_{fold}", name=config.logger.experiment_name)
@@ -280,7 +280,7 @@ if __name__ == '__main__':
             # Checkpoint callback
             checkpoint_cb = ModelCheckpoint(monitor=config.checkpoint.monitor, dirpath=os.path.join(config.logger.log_dir, config.logger.experiment_name, f'version_{version}_fold_{fold}'), filename='{epoch:03d}_{' + config.checkpoint.monitor + ':.6f}', save_weights_only=True, save_top_k=config.checkpoint.save_top_k, mode=config.checkpoint.mode)
             
-            early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=1e-4, patience=6, verbose=True, mode="min")
+            early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=1e-5, patience=10, verbose=True, mode="min")
 
             # Trainer
             trainer = Trainer(logger=logger, accelerator=device, devices=[0] if device == "gpu" else "auto", default_root_dir=config.logger.log_dir, max_epochs=config.model.epochs, check_val_every_n_epoch=1, callbacks=[checkpoint_cb, early_stop_callback], log_every_n_steps=1, num_sanity_val_steps=0,reload_dataloaders_every_n_epochs=1)

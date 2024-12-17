@@ -4,12 +4,12 @@ model:
   name: conv_lstm
   epochs: 100
   batch_size: 32
-  optimizer: adam
+  optimizer: sgd
   scheduler: plateau
   rnn_type: lstm
-  hidden_size: 32
+  hidden_size: 48
   num_layers: 2
-  lr: 1e-5
+  lr: 1e-4
   weight_decay: 1e-4
   dropout: .1
   only_test: False
@@ -17,7 +17,7 @@ model:
   lf: fl          #wbce, bce, fl
   alpha_fl: .2
   gamma_fl: 2
-  pos_weight: .9
+  pos_weight: .8
   augmentation_techniques: ['random_affine', 'shear', 'random_rotate', 'random_flip']
   p_augmentation: .9
   depth_attention: 4

@@ -92,8 +92,7 @@ class PatchEmbedding(nn.Module):
         self.patch_size = patch_size
         self.use_clinical_data = use_clinical_data
         
-        self.backbone = resnet18(pretrained=False)
-        # self.backbone = ConvBackbone(in_channels=num_channels, out_dim_backbone=emb_size)
+        self.backbone = resnet18(pretrained=True)
         
         self.backbone.fc = nn.Linear(self.backbone.fc.in_features, emb_size)  # Adjust final layer
         
@@ -147,7 +146,7 @@ class DeiT(nn.Sequential):
         )
 
 class TransMedModel(nn.Module):
-    def __init__(self, patch_size=1, emb_size=512, n_classes=1, use_clinical_data=False, out_dim_clincal_features=64, dropout=.1, depth_attention = 12):
+    def __init__(self, patch_size=2, emb_size=512, n_classes=1, use_clinical_data=False, out_dim_clincal_features=64, dropout=.1, depth_attention = 12):
         super(TransMedModel, self).__init__()
         
         # Define patch size
@@ -171,20 +170,12 @@ class TransMedModel(nn.Module):
         multimodal_image = torch.cat((mr, rtd), dim=1)  # batch_size, modalities (2), channel (1), depth, height, width
         
         input_transformer = multimodal_image
-        
-        # if self.patch_size > 1:
-        #     input_transformer = F.pad(input_transformer, (1, 1, 1, 1, 1, 1))
 
         if self.use_clinical_data:
             clinical_feat = self.cd_backbone(clinical_data)
             input_transformer = (input_transformer, clinical_feat)
         
         transformer_output = self.transformer(input_transformer)[:, 0]
-        
-        
-        # if self.use_clinical_data:
-        #     clinical_feat = self.cd_backbone(clinical_data)
-        #     transformer_output = torch.cat((transformer_output, clinical_feat), dim=1)
         
         out = self.head(transformer_output)
         
