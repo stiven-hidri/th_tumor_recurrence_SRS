@@ -14,7 +14,7 @@ def generate_resnet34_3d(cuda=True):
     return model
             
 class WDTConv(nn.Module):
-    def __init__(self, dropout = .1, use_clinical_data=True, out_dim_backbone=512, out_dim_clincal_features=64):
+    def __init__(self, dropout = .1, use_clinical_data=True, out_dim_backbone=256, out_dim_clincal_features=64):
         super(WDTConv, self).__init__()
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -22,10 +22,8 @@ class WDTConv(nn.Module):
         self.use_clinical_data = use_clinical_data
         
         input_dim = out_dim_backbone + out_dim_clincal_features if self.use_clinical_data else out_dim_backbone
-
-        #self.backbone = generate_resnet34_3d()
         
-        self.backbone = MobileNet3D(out_dim_backbone=out_dim_backbone, dropout=dropout)
+        self.backbone = ConvBackbone3D(out_dim_backbone=out_dim_backbone, dropout=dropout)
         
         if self.use_clinical_data:
             self.cd_backbone = MlpCD(pretrained=False)

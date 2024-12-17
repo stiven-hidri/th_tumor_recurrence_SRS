@@ -12,7 +12,6 @@ class BackboneCNN(nn.Module):
     
         self.backbone = models.resnet34(pretrained=pretrained)
         
-        
         self.backbone.conv1 = nn.Conv2d(
             in_channels=2,out_channels=self.backbone.conv1.out_channels,
             kernel_size=self.backbone.conv1.kernel_size,
@@ -39,7 +38,9 @@ class ConvLSTM(nn.Module):
         super(ConvLSTM, self).__init__()
         self.use_clinical_data=use_clinical_data
         
-        self.backbone = MobileNet(in_channels=2, out_dim_backbone=out_dim_backbone, dropout=dropout)
+        self.backbone = BackboneCNN(out_dim_backbone, pretrained=True)
+        
+        # self.backbone = MobileNet(in_channels=2, dropout=dropout, out_dim_backbone=out_dim_backbone)
         
         self.input_dim_rnn = out_dim_backbone + out_dim_clincal_features if self.use_clinical_data else out_dim_backbone
             
