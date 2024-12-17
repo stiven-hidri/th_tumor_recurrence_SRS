@@ -8,17 +8,12 @@ import torchio as tio
 
 def test_augmentation():
     path_to_data = os.path.join(os.path.dirname(__file__),'..', 'data', 'processed', 'global_data.pkl')
+    
     transform_big = tio.Compose([
-        tio.RandomFlip(axes=(0, 1, 2), flip_probability=0.5),
-        tio.RandomElasticDeformation(
-            num_control_points=7,
-            max_displacement=5.0,
-            locked_borders=2,
-            image_interpolation='linear'
-        )
+        tio.RandomAffine(scales=(0.7, 1.3), degrees=(0, 0), translation=(0, 0), image_interpolation='linear', default_pad_value=0)
     ])
     transform_small = tio.Compose([
-        tio.RandomFlip(axes=(0, 1, 2), flip_probability=0.5)
+        tio.RandomAffine(scales=(0.9, 1.1), degrees=(0, 0), translation=(0, 0), image_interpolation='linear', default_pad_value=0)
     ])
     
     OUTPUT_PATH = os.path.join(os.path.dirname(__file__), 'display', 'augmentation')
@@ -31,14 +26,17 @@ def test_augmentation():
         chosen_samples = random.sample(range(len(data['mr'])), k=MAX_SAMPLES)
         for cnt, i_sample in enumerate(chosen_samples):
             print(f"{cnt+1}/{MAX_SAMPLES}", end='\r')
-            mr, rtd = torch.tensor(data['mr'][i_sample]).unsqueeze(0), torch.tensor(data['rtd'][i_sample]).unsqueeze(0)
+            
+            mr, rtd = torch.tensor(data['mr'][i_sample]), torch.tensor(data['rtd'][i_sample])
+            k=random.randint(1, 3)
+            axis = random.choice([(0, 1), (0,2), (1,2)])
             
             subject = tio.Subject(
-                mr=tio.ScalarImage(tensor=mr), 
-                rtd=tio.ScalarImage(tensor=rtd)
+                mr=tio.ScalarImage(tensor=mr.unsqueeze(0)), 
+                rtd=tio.ScalarImage(tensor=rtd.unsqueeze(0))
             )
             
-            transformed_subject = transform_big(subject) if mr.shape[1]*mr.shape[2]*mr.shape[3] > 20**3 else transform_small(subject)
+            transformed_subject = transform_big(subject)
             mr_aug = transformed_subject['mr'].data
             rtd_aug = transformed_subject['rtd'].data
             
