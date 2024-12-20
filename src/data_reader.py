@@ -1,4 +1,5 @@
 import argparse
+from collections import defaultdict
 import os
 import pickle
 import pprint
@@ -13,6 +14,10 @@ import numpy as np
 from scipy.spatial.distance import pdist
 import sys
 import matplotlib.pyplot    as plt
+from scipy.ndimage import binary_dilation
+from scipy.ndimage import zoom
+
+all_info = defaultdict(lambda: 0)        
 
 class RawData_Reader():
     def __init__(self) -> None:
@@ -36,49 +41,46 @@ class RawData_Reader():
         self.CLINIC_FEATURES_TO_NORMALIZE = [2, 5, 6, 7]
         self.CLINIC_FEATURES_TO_KEEP = [0, 1, 2, 3, 4, 6, 7]
         
-        self.split_info = None
-        
         self.global_data = {'mr': [], 'rtd': [], 'clinical_data': [], 'label': [], 'subject_id': []}
-        #final outputs 
-        self.train_set = None
-        self.val_set = None
-        self.test_set = None
-        
-        self.ALL_SPLITS = None
     
-    def plot(self, stuff, keys, progressive=0, c_init=6):
+    def plot(self, stuff, keys, c_init=6):
+        for progressive in range(len(stuff['mr'])):
         
-        r = len(keys)  # Number of rows (types of images)
-        indexes = np.where(np.sum(stuff['mr'][progressive], axis=(1, 2)) > 0)[0]  # Find non-empty slices more efficiently
-        
-        c = c_init if len(indexes) >= c_init else len(indexes)  # Number of columns (slices)
-        indexes = np.linspace(min(indexes), max(indexes), c+2, dtype=int)[1:-1]
-        
-        fig = plt.figure(figsize=(13, 8))  # Optional: Smaller figure size
-        plt.tight_layout(pad=0, w_pad=0, h_pad=0)  # Adjust values as needed
-        
-        fig.suptitle(f'Label: {stuff["label"][progressive]}', fontsize=12)
+            r = len(keys)  # Number of rows (types of images)
+            indexes = np.where(np.sum(stuff['mr'][progressive], axis=(1, 2)) > 0)[0]  # Find non-empty slices more efficiently
+            
+            c = c_init if len(indexes) >= c_init else len(indexes)  # Number of columns (slices)
+            indexes = np.linspace(min(indexes), max(indexes), c+2, dtype=int)[1:-1]
+            
+            fig = plt.figure(figsize=(13, 8))  # Optional: Smaller figure size
+            plt.tight_layout(pad=0, w_pad=0, h_pad=0)  # Adjust values as needed
+            
+            fig.suptitle(f'Label: {stuff["label"][progressive]}', fontsize=12)
 
-        for i, key in enumerate(keys):
-            image = stuff[key][progressive]
-            for j in range(c):
-                ax = fig.add_subplot(r, c, i * c + j + 1)  # Create subplot
-                ax.axis('off')
-                ax.imshow(image[indexes[j]])
-                if j == 0:
-                    ax.set_title(f'{key}', fontsize=10)
-                    
-        plt.show()
-        
+            for i, key in enumerate(keys):
+                image = stuff[key][progressive]
+                for j in range(c):
+                    ax = fig.add_subplot(r, c, i * c + j + 1)  # Create subplot
+                    ax.axis('off')
+                    ax.imshow(image[indexes[j]])
+                    if j == 0:
+                        ax.set_title(f'{key}', fontsize=10)
+                        
+            plt.show()
+
+
     def full_run(self, cleanOutDir = True, debug = False):
+        
         self.__adjust_dataframes__()
         
         if cleanOutDir:
             self.__clean_output_directory__(self.OUTPUT_PROCESSED_DATA_FOLDER_PATH)
         
         if debug:
+            #try only one subject for debugging
             metadata_by_subjectid = self.rawdata_meta[(self.rawdata_meta['subject_id'] == 'GK_243')].groupby(['subject_id'])
         else:
+            #all subjects
             metadata_by_subjectid = self.rawdata_meta.groupby(['subject_id'])
             
         total_subjects = len(metadata_by_subjectid)
@@ -94,33 +96,30 @@ class RawData_Reader():
             for course ,(_, values) in enumerate(metadata_by_studyuid, start=1):
                 path_MR, path_RTD, path_RTS = self.__get_mr_rtd_rts_path__(values)
                 
-                mr, rtd = self.__get_mr_rtd_resampled__(path_MR, path_RTD)
+                mr, rtd, masks = self.__get_imaging_reasampled__(path_MR, path_RTD, path_RTS, subject_id, course)
                 
-                masks_with_longest_diameter = self. __get_rts__(path_RTS, path_MR,subject_id, course)
-                
-                masks = { roi: mask_with_longest_diameter[0] for roi, mask_with_longest_diameter in masks_with_longest_diameter.items() }
-                
-                assert ( masks[list(masks.keys())[0]].shape == mr.shape)
-                
-                longest_diameters = { roi: mask_with_longest_diameter[1] for roi, mask_with_longest_diameter in masks_with_longest_diameter.items() }
-                
-                mrs, rtds = self.__mask_and_crop__(mr, rtd, masks)
-                
-                rois = masks.keys()
-                
-                labels = self.__get_labels__(rois, subject_id, course)
-                clinical_data = self.__get_clinical_data__(rois, subject_id, course, longest_diameters)
-                
-                self.__append_data__(subject_id, mrs, rtds, clinical_data, labels)
-                
-                # if debug:
-                #     self.plot(self.global_data, ['mr', 'rtd'], -1)
+                if masks != {}:
+                    longest_diameters = { roi: self.__longest_diameter__(m) for roi, m in masks.items() }
+                    
+                    mrs, rtds = self.__mask_and_crop__(mr, rtd, masks)
+                    
+                    rois = masks.keys()
+                    
+                    labels = self.__get_labels__(rois, subject_id, course)
+                    clinical_data = self.__get_clinical_data__(rois, subject_id, course, longest_diameters)
+                    
+                    self.__append_data__(subject_id, mrs, rtds, clinical_data, labels)
                     
             print(f'\rStep: {cnt+1}/{total_subjects}', end='')
+        
+        # if debug:
+        #     self.plot(self.global_data, ['mr', 'rtd'])
         
         self.__clean_clinical_data__()
         
         self.__save__()
+        
+        pprint.pprint(all_info)
         
         print('\nData has been read successfully!')
     
@@ -158,31 +157,69 @@ class RawData_Reader():
         
         return path_MR, path_RTD, path_RTS
 
-    def resample_image_to_reference(self, image, reference_image):
+    def resample_to_reference(self, image, reference_image, is_binary=False):
         resampler = sitk.ResampleImageFilter()
-        resampler.SetSize(reference_image.GetSize())
-        resampler.SetOutputSpacing(reference_image.GetSpacing())
-        resampler.SetOutputOrigin(reference_image.GetOrigin())
-        resampler.SetOutputDirection(reference_image.GetDirection())
-        resampler.SetTransform(sitk.Transform())  # Identity transform
-        resampler.SetInterpolator(sitk.sitkLinear)  # Use linear interpolation for continuous data
+        
+        resampler.SetReferenceImage(reference_image)
+        resampler.SetInterpolator(sitk.sitkNearestNeighbor if is_binary else sitk.sitkLinear)
+        
+        return resampler.Execute(image)
 
-        # Execute resampling
-        resampled_image = resampler.Execute(image)
-        return resampled_image
+    def resample_main(self, image, target_spacing=(1., 1., 1.)):
+        original_spacing = image.GetSpacing()
+        original_size = image.GetSize()
 
-    def __get_mr_rtd_resampled__(self, path_MR, path_RTD):
+        # Calculate the new size
+        out_size = [
+            int(np.round(original_size[0] * (original_spacing[0] / target_spacing[0]))),
+            int(np.round(original_size[1] * (original_spacing[1] / target_spacing[1]))),
+            int(np.round(original_size[2] * (original_spacing[2] / target_spacing[2])))
+        ]
+
+        # Resample
+        resampler = sitk.ResampleImageFilter()
+        resampler.SetOutputSpacing(target_spacing)
+        resampler.SetSize(out_size)
+        resampler.SetInterpolator(sitk.sitkLinear)
+        resampler.SetOutputDirection(image.GetDirection())
+        resampler.SetTransform(sitk.Transform())
+        resampler.SetDefaultPixelValue(image.GetPixelIDValue())
+        resampler.SetOutputOrigin(image.GetOrigin())
+        
+        return resampler.Execute(image)
+
+    def create_sitkmask(self, mask, reference_mr):
+        mask_image = sitk.GetImageFromArray(mask.astype(np.uint8))  # Ensure binary type
+        mask_image.SetOrigin(reference_mr.GetOrigin())
+        mask_image.SetSpacing(reference_mr.GetSpacing())
+        mask_image.SetDirection(reference_mr.GetDirection())
+        
+        return mask_image
+        
+
+    def __get_imaging_reasampled__(self, path_MR, path_RTD, path_RTS, subject_id, course):
         mr_dicom = self.__read_dicom__(path_MR)
         rtd_dicom = self.__read_dicom__(path_RTD)
+        masks = self.__get_rts__(path_RTS, path_MR, subject_id, course)
         
-        rtd_dicom_resampled = self.resample_image_to_reference(rtd_dicom, mr_dicom)
+        mr_dicom_resampled = self.resample_main(mr_dicom)
+        rtd_dicom_resampled = self.resample_to_reference(rtd_dicom, mr_dicom_resampled)
         
-        mr_np = sitk.GetArrayFromImage(mr_dicom)
+        masks_np = {}
+        
+        for key, m in masks.items():
+            mask_sitk = self.create_sitkmask(m, mr_dicom)
+            mask_sitk_resampled = self.resample_to_reference(mask_sitk, mr_dicom_resampled, is_binary=True)
+            cur_mask_np = sitk.GetArrayFromImage(mask_sitk_resampled)
+            
+            masks_np[key] = cur_mask_np
+        
+        mr_np = sitk.GetArrayFromImage(mr_dicom_resampled)
         rtd_np = sitk.GetArrayFromImage(rtd_dicom_resampled)
         
         assert(rtd_np.shape == mr_np.shape)
         
-        return mr_np, rtd_np
+        return mr_np, rtd_np, masks_np
 
     def __read_dicom__(self, path):
         reader = sitk.ImageSeriesReader()
@@ -206,28 +243,9 @@ class RawData_Reader():
         
         return max_diameter
 
-    def __clean_roi_name__(self, roi:str):
-        roi = roi.lower()
-                
-        roi = roi.replace("l ", "lt")
-        key = roi.replace("left ", "lt")
-        roi = roi.replace("r ", "rt")
-        roi = roi.replace("right ", "rt")
-        
-        roi = roi.replace(" ", "")
-        
-        return roi
-
     def __get_rts__(self, path_RTS, series_path, subject_id, course):
         rt_struct_path = [os.path.join(path_RTS, f) for f in os.listdir(path_RTS) if f.endswith('.dcm')][0]
-        rtstruct = RTStructBuilder.create_from(dicom_series_path=series_path, rt_struct_path=rt_struct_path, )
-    
-        # lesion_location_with_lesion_id = self.clinical_data.loc[(self.clinical_data['subject_id'] == subject_id) & (self.clinical_data['course'] == course), ['roi', 'lesion_number']].values
-        
-        # id_rois_cd = { i+1:r[0] for i, r in enumerate(lesion_location_with_lesion_id) }
-        # id_roi_rts = { int(structure.ROINumber):structure.ROIName for structure in rtstruct.ds.StructureSetROISequence}
-        
-        # map_log = { id_rois_cd[k]: id_roi_rts[k] for k, v in id_rois_cd.items() }
+        rtstruct = RTStructBuilder.create_from(dicom_series_path=series_path, rt_struct_path=rt_struct_path)
         
         lesion_location_with_nrrdfilename = self.clinical_data.loc[(self.clinical_data['subject_id'] == subject_id) & (self.clinical_data['course'] == course), ['roi', 'nrrd_filename']].values    
 
@@ -251,7 +269,7 @@ class RawData_Reader():
             mask_3d = mask_3d * 1
             mask_3d = np.swapaxes(mask_3d, 0, 2)
             mask_3d = np.swapaxes(mask_3d, 1, 2)
-            masks[roinrrd_roicd[nrrd_roi]] = (mask_3d, self.__longest_diameter__(mask_3d))
+            masks[roinrrd_roicd[nrrd_roi]] = mask_3d
                 
         return masks
 
@@ -270,7 +288,7 @@ class RawData_Reader():
         for roi in rois:
             clinical_data_row = self.clinical_data.loc[(self.clinical_data['subject_id']==subject_id)&(self.clinical_data['course']==course)&(self.clinical_data['roi']==roi), ['mets_diagnosis', 'primary_diagnosis', 'age', 'gender', 'roi', 'fractions']].values[0]
             clinical_data_row = np.append(clinical_data_row, longest_diameters[roi])
-            clinical_data_row = np.append(clinical_data_row, self.clinical_data.groupby(['subject_id', 'course']).size().get((subject_id, course), 0))
+            clinical_data_row = np.append(clinical_data_row, len(list(longest_diameters.keys())))
             to_return[roi] = clinical_data_row
             
         return to_return
@@ -289,13 +307,18 @@ class RawData_Reader():
     
     def __crop_les__(self, image, mask):
         
+        # mask = binary_dilation(mask, structure=np.ones((2, 2, 2)), iterations=1).astype(np.uint8)
+
         true_points = np.argwhere(mask)
         
-        top_left = true_points.min(axis=0)
+        top_left = true_points.min(axis=0) - 5
         
-        bottom_right = true_points.max(axis=0)
+        bottom_right = true_points.max(axis=0) + 5
+        
+        # image = image * mask
         
         cropped_arr = image[top_left[0]:bottom_right[0]+1, top_left[1]:bottom_right[1]+1, top_left[2]:bottom_right[2]+1]
+        
         
         return cropped_arr
 
