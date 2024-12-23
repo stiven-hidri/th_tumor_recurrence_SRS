@@ -1,0 +1,17 @@
+einops==0.8.0
+fuzzywuzzy==0.18.0
+lightning==2.4.0
+matplotlib==3.10.0
+numpy==2.2.1
+pandas==2.2.3
+pydantic==2.10.4
+PyYAML==6.0.2
+PyYAML==6.0.2
+rt_utils==1.2.7
+scikit_learn==1.6.0
+scipy==1.14.1
+SimpleITK==2.4.0
+SimpleITK==2.4.0
+torch==2.5.0
+torchio==0.20.3
+torchvision==0.20.0
