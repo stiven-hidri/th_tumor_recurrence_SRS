@@ -18,8 +18,40 @@ def clear_directory_content(PATH):
             elif os.path.isdir(file_path):
                 shutil.rmtree(file_path)
 
+from scipy.ndimage import zoom
+import torchio as tio
+
+def pad_resize_images(global_data, i, keys, desired_shape=(40, 40, 40)):        
+    
+    for k in keys:
+        image = global_data[k][i]            
+        cropped_shape = np.array(image.shape)
+
+        factor = np.min(np.divide(desired_shape,cropped_shape))
+        
+        if factor < 1:
+            image = zoom(image, (factor,factor,factor), order=1)
+        
+        cropped_shape = np.array(image.shape)
+        
+        pad_before = np.maximum((desired_shape - cropped_shape) // 2, 0)
+        pad_after = np.maximum(desired_shape - cropped_shape - pad_before, 0)
+        
+        image = np.pad(image, (
+            (pad_before[0], pad_after[0]), 
+            (pad_before[1], pad_after[1]), 
+            (pad_before[2], pad_after[2])
+        ), mode='reflect')
+        
+        global_data[k][i] = image
+                
+    return global_data
+
 def plot(stuff, keys, progressive, c_init=6):
     r = len(keys)  # Number of rows (types of images)
+    
+    # stuff = pad_resize_images(stuff, progressive, keys)
+    
     indexes = np.where(np.sum(stuff['mr'][progressive], axis=(1, 2)) > 0)[0]  # Find non-empty slices more efficiently
     
     c = c_init if len(indexes) >= c_init else len(indexes)  # Number of columns (slices)
@@ -116,8 +148,27 @@ if __name__ == '__main__':
     
     keys = ['mr', 'rtd', 'wdt_fusion']
     
-    sample_indexes = list(random.sample(range(len(data['mr'])), k=10))
+    max_shape = np.max([mr.shape for mr in data['mr']], axis=0)
     
+    min_shape = np.min([mr.shape for mr in data['mr']], axis=0)
+    
+    mean_shape = np.mean([mr.shape for mr in data['mr']], axis=0)
+    
+    median_shape = np.median([mr.shape for mr in data['mr']], axis=0)
+    
+    print(f'max_shape: {max_shape}')
+    print(f'min_shape: {min_shape}')
+    print(f'mean_shape: {mean_shape}')
+    print(f'median_shape: {median_shape}')
+    
+    volumes = [np.prod(data['mr'][i].shape) for i in range(len(data['mr']))]
+
+    max_volume_index = np.argmax(volumes)
+    min_volume_index = np.argmin(volumes)
+
+    
+    # sample_indexes = list(random.sample(range(len(data['mr'])), k=10))
+    sample_indexes = list(range(len(data['mr'])))
     for i in sample_indexes:
         print(f'\r{i+1}/{len(sample_indexes)}', end='')
         plot(data, keys, i)

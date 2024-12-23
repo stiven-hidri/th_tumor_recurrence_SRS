@@ -92,8 +92,6 @@ class ClassifierDataset(Dataset):
     def __wdt_fusion__(self, mr, rtd):
         coeffs_mr = pywt.dwtn(mr, 'db1', axes=(0, 1, 2))
         coeffs_rtd = pywt.dwtn(rtd, 'db1', axes=(0, 1, 2))
-            
-        # fused_details_avg = {key: (coeffs_mr[key]*.6 + coeffs_rtd[key]*.4) for key in coeffs_mr.keys()}
 
         fused_details_e = {}
         for key in coeffs_mr.keys():
