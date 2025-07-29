@@ -40,7 +40,7 @@ Dataloaders
 ### log/
 Models checkpoints
 
-## Most imortant files (inside src)
+## Most ipmortant files (inside src)
 
 ### python3 data_reader.py --debug
 
